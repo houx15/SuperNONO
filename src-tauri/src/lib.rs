@@ -23,6 +23,7 @@ pub fn run() {
             commands::meeting_fs::meeting_append_utterance,
             commands::meeting_fs::meeting_list,
             commands::meeting_fs::meeting_read,
+            commands::meeting_fs::meeting_export_md,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

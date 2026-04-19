@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use std::fs::{self, File, OpenOptions};
+use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use tauri::{AppHandle, Manager};
@@ -182,6 +182,17 @@ pub async fn meeting_read(app: AppHandle, id: String) -> Result<FullMeetingPaylo
         ai_exchanges,
         minutes_md,
     })
+}
+
+#[tauri::command]
+pub async fn meeting_export_md(
+    app: AppHandle,
+    id: String,
+    dest_path: String,
+) -> Result<(), FsError> {
+    let src = meeting_dir(&app, &id)?.join("minutes.md");
+    fs::copy(&src, PathBuf::from(dest_path))?;
+    Ok(())
 }
 
 #[cfg(test)]
