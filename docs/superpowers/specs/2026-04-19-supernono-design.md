@@ -83,11 +83,14 @@ All under `src/logic/`. Each ≤~250 lines. No React, no DOM, no Tauri imports.
 ### Adapter interfaces
 
 ```ts
+type TestResult = { ok: true } | { ok: false; reason: string };
+
 interface AsrClient {
   start(opts: AsrOpts): Promise<void>;
   stop(): Promise<void>;
   on(event: 'partial' | 'final' | 'error' | 'closed',
      cb: (payload: Utterance | Error) => void): Unsubscribe;
+  testCredentials(appId: string, accessKey: string): Promise<TestResult>;
 }
 
 interface E2eClient {
@@ -96,11 +99,13 @@ interface E2eClient {
   on(event: 'audio' | 'question_transcript' | 'answer_transcript' | 'turn_end' | 'error',
      cb: (payload: unknown) => void): Unsubscribe;
   close(): Promise<void>;
+  testCredentials(apiKey: string): Promise<TestResult>;
 }
 
 interface LlmClient {
   complete(req: LlmReq): Promise<LlmResp>;
   stream(req: LlmReq): AsyncIterable<LlmChunk>;
+  testCredentials(apiKey: string): Promise<TestResult>;
 }
 
 interface Persistence {
@@ -191,6 +196,8 @@ asr_stop(session_id) -> ();
 
 Opens a WebSocket to Volcano's streaming-ASR endpoint with custom auth headers (impossible from a browser). Parses Volcano's binary frame protocol per `docs/volcano/asr-stream-api.md`. Emits Tauri events `asr://partial`, `asr://final`, `asr://error`, `asr://closed`. Uses `tokio-tungstenite`. One task per session_id, tracked in `Arc<Mutex<HashMap<SessionId, AsrTask>>>`.
 
+Also exposes `asr_test_credentials(app_id, access_key) -> TestResult` — opens a WS, completes the auth handshake, closes immediately. Returns `{ok: true}` on success or `{ok: false, reason}` on auth/network failure. Backs the Settings-modal Test button.
+
 ### `e2e_ws.rs`
 
 ```rust
@@ -200,6 +207,8 @@ e2e_close(session_id) -> ();
 ```
 
 Doubao Realtime WebSocket (`docs/volcano/e2e-interaction-api.md`). PCM-in, PCM-out. Emits `e2e://question_transcript`, `e2e://answer_transcript`, `e2e://audio` (binary), `e2e://turn_end`, `e2e://error`. Same task-per-session shape as `volcano_ws`.
+
+Also exposes `e2e_test_credentials(api_key) -> TestResult` — brief handshake-only session to verify the key is accepted. Backs the Settings-modal Test button.
 
 ### `window_controls.rs`
 
@@ -365,7 +374,7 @@ Meeting IDs: `mtg_` + 8 lowercase hex chars. Generated on Start.
 
 - Tauri 2 project scaffold, React + TS + Vite + pnpm.
 - ESLint, Prettier, `cargo fmt`, `cargo clippy`, pre-commit hook.
-- Full UI port from prototype (Sidebar, Idle, Meeting, Past, Settings modal, Export modal, Orb with all four states, traffic lights, theme toggle).
+- Full UI port from prototype (Sidebar, Idle, Meeting, Past, Settings modal, Export modal, Orb with all four states, traffic lights, theme toggle). Settings modal includes a **Test** button next to each credential field (Volcano App ID / Access Key as a pair, Doubao API key) — wired to the adapter's `testCredentials()` stub that resolves to `{ok: false, reason: 'Not implemented until M2'}` in M1.
 - Design tokens extracted from `desktop.css`/`app.css` into CSS variables.
 - Window chrome wired to real Rust commands (traffic lights, draggable titlebar, `⌘⇧N` global shortcut).
 - All TS product-logic modules, test-first, with full fake adapters.
@@ -393,6 +402,7 @@ Things the human must provide:
 - Complete `e2e_ws.connect()` against the real Doubao endpoint.
 - Real mic capture → PCM chunks → Rust ASR (and routable to E2E during Q&A).
 - Real `DoubaoLlmClient.complete/stream` calls.
+- Real `testCredentials()` implementations for all three adapters, wired to the existing Settings-modal Test buttons. UI reports success (✓) / failure (× with reason) inline.
 - Debug and polish pass: whatever breaks on contact with reality.
 - Fill in `fixtures/asr-transcripts/` with real captures for regression coverage.
 - `docs/manual-test-plan.md` walkthrough.
