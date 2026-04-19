@@ -21,6 +21,8 @@ pub fn run() {
             commands::meeting_fs::meeting_write_minutes,
             commands::meeting_fs::meeting_write_ai_exchanges,
             commands::meeting_fs::meeting_append_utterance,
+            commands::meeting_fs::meeting_list,
+            commands::meeting_fs::meeting_read,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

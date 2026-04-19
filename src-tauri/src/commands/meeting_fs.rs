@@ -119,6 +119,71 @@ pub async fn meeting_append_utterance(
     Ok(())
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct FullMeetingPayload {
+    pub meta: serde_json::Value,
+    pub summaries: serde_json::Value,
+    pub transcript: Vec<serde_json::Value>,
+    pub ai_exchanges: serde_json::Value,
+    pub minutes_md: Option<String>,
+}
+
+#[tauri::command]
+pub async fn meeting_list(app: AppHandle) -> Result<Vec<serde_json::Value>, FsError> {
+    let dir = meetings_dir(&app)?;
+    let mut out = Vec::new();
+    for entry in fs::read_dir(dir)? {
+        let e = entry?;
+        if !e.file_type()?.is_dir() {
+            continue;
+        }
+        let meta_path = e.path().join("meeting.json");
+        if !meta_path.exists() {
+            continue;
+        }
+        let bytes = fs::read(&meta_path)?;
+        let v: serde_json::Value = serde_json::from_slice(&bytes)?;
+        out.push(v);
+    }
+    Ok(out)
+}
+
+#[tauri::command]
+pub async fn meeting_read(app: AppHandle, id: String) -> Result<FullMeetingPayload, FsError> {
+    let dir = meeting_dir(&app, &id)?;
+    let meta: serde_json::Value = serde_json::from_slice(&fs::read(dir.join("meeting.json"))?)?;
+    let summaries: serde_json::Value = serde_json::from_slice(
+        &fs::read(dir.join("summaries.json"))
+            .unwrap_or_else(|_| b"{\"schema_version\":1,\"summaries\":[]}".to_vec()),
+    )?;
+    let ai_exchanges: serde_json::Value = serde_json::from_slice(
+        &fs::read(dir.join("ai-exchanges.json"))
+            .unwrap_or_else(|_| b"{\"schema_version\":1,\"exchanges\":[]}".to_vec()),
+    )?;
+    let minutes_md = fs::read_to_string(dir.join("minutes.md")).ok();
+
+    let mut transcript = Vec::new();
+    let tr_path = dir.join("transcript.jsonl");
+    if tr_path.exists() {
+        let text = fs::read_to_string(tr_path)?;
+        for line in text.lines() {
+            if line.trim().is_empty() {
+                continue;
+            }
+            let v: serde_json::Value = serde_json::from_str(line)?;
+            transcript.push(v);
+        }
+    }
+
+    Ok(FullMeetingPayload {
+        meta,
+        summaries,
+        transcript,
+        ai_exchanges,
+        minutes_md,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
