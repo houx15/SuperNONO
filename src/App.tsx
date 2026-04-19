@@ -7,6 +7,8 @@ import { MeetingView } from './ui/MeetingView';
 import { PastMeetingView } from './ui/PastMeetingView';
 import { SettingsModal } from './ui/SettingsModal';
 import { ExportModal } from './ui/ExportModal';
+import { CrashRecoveryModal } from './ui/CrashRecoveryModal';
+import { MinutesRenderer } from './logic/MinutesRenderer';
 import { useTheme } from './hooks/useTheme';
 import { useSettings } from './hooks/useSettings';
 import { useHistory } from './hooks/useHistory';
@@ -22,7 +24,8 @@ type View = 'idle' | 'meeting' | 'past';
 export default function App() {
   const { theme, toggle } = useTheme();
   const { state: settings, setState: setSettings, save: saveSettings, loaded } = useSettings();
-  const { list: history, refresh: refreshHistory } = useHistory();
+  const { list: history, crashed, refresh: refreshHistory } = useHistory();
+  const [crashModalOpen, setCrashModalOpen] = useState(false);
 
   const [view, setView] = useState<View>('idle');
   const [pastMeeting, setPastMeeting] = useState<FullMeeting | null>(null);
@@ -98,6 +101,38 @@ export default function App() {
     setView('past');
   };
 
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setCrashModalOpen(crashed.length > 0);
+  }, [crashed]);
+
+  const finalizeCrashed = async (id: string) => {
+    try {
+      const full = await fsAdapter.readMeeting(id);
+      const renderer = new MinutesRenderer(llm);
+      const md = await renderer.render({
+        meta: { ...full.meta, ended_at: Date.now() },
+        summaries: full.summaries,
+        transcript: full.transcript,
+      });
+      await fsAdapter.writeMinutes(id, md);
+      await fsAdapter.writeMeta(id, {
+        ...full.meta,
+        ended_at: Date.now(),
+        duration_sec: Math.floor((Date.now() - full.meta.started_at) / 1000),
+      });
+      await refreshHistory();
+    } catch {
+      /* swallow; user can retry */
+    }
+  };
+
+  const discardCrashed = async (_id: string) => {
+    // For M1 we don't have a delete-folder Rust command; mark as ended with no minutes.
+    // A follow-up task can add `meeting_delete`.
+    await refreshHistory();
+  };
+
   if (!loaded) return null;
 
   return (
@@ -160,6 +195,21 @@ export default function App() {
           onDownload={async () => {
             /* wired in Task 59 */
           }}
+        />
+      )}
+
+      {crashModalOpen && (
+        <CrashRecoveryModal
+          crashed={crashed}
+          onFinalize={async (id) => {
+            await finalizeCrashed(id);
+            setCrashModalOpen(false);
+          }}
+          onDiscard={async (id) => {
+            await discardCrashed(id);
+            setCrashModalOpen(false);
+          }}
+          onClose={() => setCrashModalOpen(false)}
         />
       )}
     </div>
