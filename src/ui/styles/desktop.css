@@ -1346,6 +1346,24 @@ html, body {
 /* --------------------------------------------------------------
    Window-drag regions — let titlebar be draggable, keep controls clickable
    -------------------------------------------------------------- */
+.sidebar-head {
+  -webkit-app-region: drag;
+}
+
+.idle-view {
+  position: relative;
+}
+.idle-view::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 48px;
+  -webkit-app-region: drag;
+  z-index: 10;
+}
+
 .tl-dot,
 .icon-btn,
 button,
