@@ -1,0 +1,21 @@
+{
+  "title": "Q2 strategy review",
+  "events": [
+    { "atMs": 0, "speaker": "Speaker 1", "text": "我们从 Q1 的留存数据开始" },
+    { "atMs": 20000, "speaker": "Speaker 2", "text": "第 30 日留存是 21%" },
+    { "atMs": 45000, "speaker": "Speaker 3", "text": "主要卡在 onboarding 的第二步" },
+    { "atMs": 120000, "speaker": "Speaker 1", "text": "下一项:新市场扩张,东南亚还是日本" },
+    { "atMs": 180000, "speaker": "Speaker 2", "text": "新加坡的 ARPU 偏低,但竞争少" },
+    { "atMs": 240000, "speaker": "Speaker 4", "text": "日本用户付费意愿强,但合规成本高" },
+    { "atMs": 320000, "speaker": "Speaker 1", "text": "倾向于先做新加坡" },
+    { "atMs": 400000, "speaker": "Speaker 4", "text": "定价结构可以参考竞品的阶梯模型" },
+    { "atMs": 460000, "speaker": "Speaker 1", "text": "嘿 Nono, 帮我查一下新加坡主要 SaaS 竞品的月费" },
+    { "atMs": 520000, "speaker": "Speaker 2", "text": "我们用混合定价方案" },
+    { "atMs": 600000, "speaker": "Speaker 3", "text": "今天到这里,下次继续" }
+  ],
+  "wakeWordAtEventIndex": 8,
+  "qa": {
+    "question": "新加坡主要 SaaS 竞品的月费区间是多少?",
+    "answer": "头部三家月费落在 <strong>12 - 28 美元</strong> 区间,企业版约 <strong>45 - 80 美元</strong>。"
+  }
+}

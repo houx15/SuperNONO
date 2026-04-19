@@ -1,0 +1,10 @@
+[
+  {
+    "match": "summarising",
+    "text": "{\"topic\":\"Q1 留存数据\",\"text\":\"团队讨论了第 30 日 21% 留存问题,主要在 onboarding 第二步。决定将此作为本季度优先修复项。\",\"sameTopic\":false}"
+  },
+  {
+    "match": "extracting",
+    "text": "{\"decisions\":[\"Q2 优先修复 onboarding 第二步\",\"先进入新加坡市场\"],\"actions\":[{\"owner\":\"Speaker 3\",\"task\":\"重设计 onboarding 权限流\",\"tag\":\"Design\"}]}"
+  }
+]
