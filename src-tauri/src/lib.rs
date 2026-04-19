@@ -44,6 +44,8 @@ pub fn run() {
             commands::window_controls::window_close,
             commands::window_controls::window_minimize,
             commands::window_controls::window_toggle_maximize,
+            commands::prevent_sleep::prevent_sleep_enable,
+            commands::prevent_sleep::prevent_sleep_disable,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
