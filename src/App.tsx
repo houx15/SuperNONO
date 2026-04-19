@@ -1,4 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
+import {
+  useEffect,
+  useMemo,
+  useState,
+  type CSSProperties,
+  type MouseEvent as ReactMouseEvent,
+} from 'react';
 import { listen } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api/core';
 import { save as saveDialog } from '@tauri-apps/plugin-dialog';
@@ -23,8 +29,12 @@ import { DevTweaks } from './ui/DevTweaks';
 import { FakeE2eClient } from './logic/__fakes__/FakeE2eClient';
 import { FakeLlmClient } from './logic/__fakes__/FakeLlmClient';
 import { loadAsrFixture, loadDoubaoRules } from './logic/fixtures';
-import { Icon } from './ui/Icon';
 import type { FullMeeting } from './logic/types';
+
+const SIDEBAR_DEFAULT = 260;
+const SIDEBAR_MIN = 180;
+const SIDEBAR_MAX = 400;
+const SIDEBAR_COLLAPSE_THRESHOLD = 140;
 
 type View = 'idle' | 'meeting' | 'past';
 
@@ -38,24 +48,51 @@ export default function App() {
   const [pastMeeting, setPastMeeting] = useState<FullMeeting | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(
-    () => localStorage.getItem('supernono.sidebarCollapsed') === 'true',
-  );
+  const [sidebarWidth, setSidebarWidth] = useState(() => {
+    const saved = localStorage.getItem('supernono.sidebarWidth');
+    if (saved === null) return SIDEBAR_DEFAULT;
+    const n = parseInt(saved, 10);
+    if (Number.isNaN(n)) return SIDEBAR_DEFAULT;
+    return Math.max(0, Math.min(SIDEBAR_MAX, n));
+  });
+  const [resizing, setResizing] = useState(false);
 
   useEffect(() => {
-    localStorage.setItem('supernono.sidebarCollapsed', String(sidebarCollapsed));
-  }, [sidebarCollapsed]);
+    localStorage.setItem('supernono.sidebarWidth', String(sidebarWidth));
+  }, [sidebarWidth]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'b') {
         e.preventDefault();
-        setSidebarCollapsed((c) => !c);
+        setSidebarWidth((w) => (w === 0 ? SIDEBAR_DEFAULT : 0));
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, []);
+
+  const startSidebarResize = (e: ReactMouseEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startW = sidebarWidth;
+    setResizing(true);
+    const onMove = (ev: MouseEvent) => {
+      const raw = startW + (ev.clientX - startX);
+      let next = raw;
+      if (raw < SIDEBAR_COLLAPSE_THRESHOLD) next = 0;
+      else if (raw < SIDEBAR_MIN) next = SIDEBAR_MIN;
+      else if (raw > SIDEBAR_MAX) next = SIDEBAR_MAX;
+      setSidebarWidth(next);
+    };
+    const onUp = () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+      setResizing(false);
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  };
 
   const [sessionId] = useState(() => 'session_' + Math.random().toString(16).slice(2, 10));
   const [fixtureMode, setFixtureMode] = useState<{
@@ -215,8 +252,15 @@ export default function App() {
 
   if (!loaded) return null;
 
+  const appStyle: CSSProperties = {
+    ['--sidebar-width' as string]: `${sidebarWidth}px`,
+  };
+
   return (
-    <div className={`app ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
+    <div
+      className={`app${sidebarWidth === 0 ? ' sidebar-collapsed' : ''}${resizing ? ' resizing' : ''}`}
+      style={appStyle}
+    >
       <Sidebar
         theme={theme}
         history={history}
@@ -228,14 +272,15 @@ export default function App() {
         onOpenSettings={() => setSettingsOpen(true)}
         isMeetingActive={view === 'meeting'}
       />
-      <button
-        className="sidebar-toggle"
-        onClick={() => setSidebarCollapsed((c) => !c)}
-        aria-label={sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'}
-        title={sidebarCollapsed ? 'Show sidebar (⌘B)' : 'Hide sidebar (⌘B)'}
-      >
-        <Icon name="panel-left" size={14} />
-      </button>
+      <div
+        className="sidebar-resize-handle"
+        onMouseDown={startSidebarResize}
+        aria-label={sidebarWidth === 0 ? 'Drag to open sidebar' : 'Drag to resize sidebar'}
+        title={
+          sidebarWidth === 0 ? 'Drag right to open sidebar (⌘B)' : 'Drag to resize sidebar (⌘B)'
+        }
+        role="separator"
+      />
       <div className="main-pane">
         {view === 'idle' && <IdleView onStart={startMeeting} />}
         {view === 'meeting' && (

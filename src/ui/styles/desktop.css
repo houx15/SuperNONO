@@ -970,7 +970,7 @@ html, body {
 
 /* ----- Sidebar ----- */
 .sidebar {
-  width: 260px;
+  width: var(--sidebar-width, 260px);
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
@@ -1374,44 +1374,57 @@ textarea {
 }
 
 /* --------------------------------------------------------------
-   Sidebar toggle — collapse/expand the history sidebar
+   Sidebar resize — drag the right edge to resize or collapse
    -------------------------------------------------------------- */
-.sidebar-toggle {
-  position: absolute;
-  top: 12px;
-  left: 80px;            /* past macOS native traffic lights */
-  width: 28px;
-  height: 28px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: var(--r-sm);
-  border: 1px solid transparent;
-  background: transparent;
-  color: var(--fg-muted);
-  cursor: pointer;
-  z-index: 20;
-  transition:
-    background 0.12s,
-    color 0.12s,
-    border-color 0.12s;
-}
-.sidebar-toggle:hover {
-  background: var(--surface-hover);
-  color: var(--fg);
-  border-color: var(--border);
-}
-
-/* Smooth slide: collapse width to 0; children hide to avoid overflow glitches */
 .sidebar {
   transition:
     width 0.18s ease,
     border-right-color 0.18s ease;
 }
+.app.resizing .sidebar {
+  transition: none; /* instant feedback while dragging */
+}
+
+.sidebar-resize-handle {
+  position: absolute;
+  top: 0;
+  left: calc(var(--sidebar-width, 260px) - 3px);
+  width: 6px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 30;
+  transition: left 0.18s ease;
+  -webkit-app-region: no-drag;
+}
+.app.resizing .sidebar-resize-handle {
+  transition: none;
+}
+.sidebar-resize-handle::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 2px;
+  width: 2px;
+  background: transparent;
+  transition: background 0.12s;
+}
+.sidebar-resize-handle:hover::before,
+.app.resizing .sidebar-resize-handle::before {
+  background: var(--accent);
+}
+
 .app.sidebar-collapsed .sidebar {
-  width: 0;
   border-right-color: transparent;
 }
 .app.sidebar-collapsed .sidebar > * {
   display: none;
+}
+.app.resizing {
+  cursor: col-resize;
+  user-select: none;
+}
+.app.resizing * {
+  cursor: col-resize !important;
+  user-select: none !important;
 }
