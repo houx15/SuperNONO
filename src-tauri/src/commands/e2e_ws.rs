@@ -14,6 +14,8 @@ pub struct TestResult {
 
 // Reference: docs/volcano/e2e-interaction-api.md — PCM in, PCM out.
 pub mod frame {
+    // Used by the M2 WebSocket bridge; covered by unit tests below.
+    #[allow(dead_code)]
     pub fn encode_start_session(system_prompt: &str, voice: &str) -> serde_json::Value {
         serde_json::json!({
             "event": "StartSession",

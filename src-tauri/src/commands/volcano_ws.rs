@@ -16,6 +16,8 @@ pub struct TestResult {
 // Reference: docs/volcano/asr-stream-api.md — binary frame layout.
 // M1: codec unit tests only. Live .connect() path is completed in M2.
 pub mod frame {
+    // Frame + codec helpers are used by the M2 WebSocket bridge; covered by unit tests below.
+    #[allow(dead_code)]
     #[derive(Debug, PartialEq)]
     pub struct Frame {
         pub message_type: u8,
@@ -25,6 +27,7 @@ pub mod frame {
         pub payload: Vec<u8>,
     }
 
+    #[allow(dead_code)]
     pub fn encode_header(f: &Frame) -> [u8; 4] {
         [
             0x11,
@@ -34,6 +37,7 @@ pub mod frame {
         ]
     }
 
+    #[allow(dead_code)]
     pub fn decode_header(bytes: &[u8]) -> Option<(u8, u8, u8, u8)> {
         if bytes.len() < 4 {
             return None;
