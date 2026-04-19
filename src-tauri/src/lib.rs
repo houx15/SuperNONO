@@ -50,6 +50,10 @@ pub fn run() {
             commands::volcano_ws::asr_send_audio,
             commands::volcano_ws::asr_stop,
             commands::volcano_ws::asr_test_credentials,
+            commands::e2e_ws::e2e_open,
+            commands::e2e_ws::e2e_send_audio,
+            commands::e2e_ws::e2e_close,
+            commands::e2e_ws::e2e_test_credentials,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
