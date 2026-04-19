@@ -76,9 +76,12 @@ export default function App() {
     e.preventDefault();
     const startX = e.clientX;
     const startW = sidebarWidth;
+    let maxDelta = 0;
     setResizing(true);
     const onMove = (ev: MouseEvent) => {
-      const raw = startW + (ev.clientX - startX);
+      const delta = ev.clientX - startX;
+      if (Math.abs(delta) > maxDelta) maxDelta = Math.abs(delta);
+      const raw = startW + delta;
       let next = raw;
       if (raw < SIDEBAR_COLLAPSE_THRESHOLD) next = 0;
       else if (raw < SIDEBAR_MIN) next = SIDEBAR_MIN;
@@ -89,6 +92,10 @@ export default function App() {
       window.removeEventListener('mousemove', onMove);
       window.removeEventListener('mouseup', onUp);
       setResizing(false);
+      // Short click (no meaningful drag) on the handle while collapsed → reopen.
+      if (maxDelta < 3 && startW === 0) {
+        setSidebarWidth(SIDEBAR_DEFAULT);
+      }
     };
     window.addEventListener('mousemove', onMove);
     window.addEventListener('mouseup', onUp);

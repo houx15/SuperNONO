@@ -1420,6 +1420,20 @@ textarea {
 .app.sidebar-collapsed .sidebar > * {
   display: none;
 }
+
+/* When collapsed, pin the resize handle to the left edge, widen it a touch,
+   and show a faint visible strip so the user can find it. */
+.app.sidebar-collapsed .sidebar-resize-handle {
+  left: 0;
+  width: 10px;
+}
+.app.sidebar-collapsed .sidebar-resize-handle::before {
+  background: var(--border);
+  left: 3px;
+}
+.app.sidebar-collapsed .sidebar-resize-handle:hover::before {
+  background: var(--accent);
+}
 .app.resizing {
   cursor: col-resize;
   user-select: none;
