@@ -20,6 +20,7 @@ pub fn run() {
             commands::meeting_fs::meeting_write_summaries,
             commands::meeting_fs::meeting_write_minutes,
             commands::meeting_fs::meeting_write_ai_exchanges,
+            commands::meeting_fs::meeting_append_utterance,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -104,6 +104,21 @@ pub async fn meeting_write_ai_exchanges(
     Ok(())
 }
 
+#[tauri::command]
+pub async fn meeting_append_utterance(
+    app: AppHandle,
+    id: String,
+    line_json: String,
+) -> Result<(), FsError> {
+    let dir = meeting_dir(&app, &id)?;
+    let path = dir.join("transcript.jsonl");
+    let mut file = OpenOptions::new().create(true).append(true).open(&path)?;
+    file.write_all(line_json.as_bytes())?;
+    file.write_all(b"\n")?;
+    file.sync_all()?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -124,5 +139,26 @@ mod tests {
         atomic_write(&path, b"a").unwrap();
         atomic_write(&path, b"bb").unwrap();
         assert_eq!(fs::read(&path).unwrap(), b"bb");
+    }
+
+    #[test]
+    fn append_grows_file_line_by_line() {
+        let d = tempdir().unwrap();
+        let p = d.path().join("t.jsonl");
+        {
+            let mut f = OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&p)
+                .unwrap();
+            f.write_all(b"{\"a\":1}").unwrap();
+            f.write_all(b"\n").unwrap();
+            f.sync_all().unwrap();
+            f.write_all(b"{\"a\":2}").unwrap();
+            f.write_all(b"\n").unwrap();
+            f.sync_all().unwrap();
+        }
+        let content = fs::read_to_string(&p).unwrap();
+        assert_eq!(content.lines().count(), 2);
     }
 }
