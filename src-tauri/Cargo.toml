@@ -30,4 +30,5 @@ core-foundation = "0.10.1"
 once_cell = "1.21.4"
 tokio = { version = "1.52.1", features = ["full"] }
 tokio-tungstenite = "0.29.0"
+tauri-plugin-dialog = "2.7.0"
 

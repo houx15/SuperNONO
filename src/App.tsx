@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { listen } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api/core';
+import { save as saveDialog } from '@tauri-apps/plugin-dialog';
 import { Sidebar } from './ui/Sidebar';
 import { IdleView } from './ui/IdleView';
 import { MeetingView } from './ui/MeetingView';
@@ -133,6 +134,17 @@ export default function App() {
     await refreshHistory();
   };
 
+  const downloadMd = async () => {
+    if (!pastMeeting) return;
+    const defaultName = pastMeeting.meta.title.replace(/[/\\:]/g, '_') + '.md';
+    const target = await saveDialog({
+      defaultPath: defaultName,
+      filters: [{ name: 'Markdown', extensions: ['md'] }],
+    });
+    if (!target) return;
+    await fsAdapter.exportMinutes(pastMeeting.meta.id, target);
+  };
+
   if (!loaded) return null;
 
   return (
@@ -192,9 +204,7 @@ export default function App() {
         <ExportModal
           meeting={pastMeeting}
           onClose={() => setExportOpen(false)}
-          onDownload={async () => {
-            /* wired in Task 59 */
-          }}
+          onDownload={downloadMd}
         />
       )}
 
