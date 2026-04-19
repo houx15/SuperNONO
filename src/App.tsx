@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { listen } from '@tauri-apps/api/event';
 import { Sidebar } from './ui/Sidebar';
 import { IdleView } from './ui/IdleView';
 import { MeetingView } from './ui/MeetingView';
@@ -46,6 +47,23 @@ export default function App() {
     await session.start(title);
     setView('meeting');
   };
+
+  useEffect(() => {
+    let unlisten: (() => void) | null = null;
+    (async () => {
+      try {
+        unlisten = await listen('shortcut://start-meeting', () => {
+          if (view === 'idle') void startMeeting();
+        });
+      } catch {
+        /* Tauri unavailable in some environments (tests) */
+      }
+    })();
+    return () => {
+      if (unlisten) unlisten();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view]);
 
   const endMeeting = async () => {
     await session.stop();
