@@ -19,7 +19,7 @@
   },
   "lint-staged": {
     "src/**/*.{ts,tsx}": ["eslint --fix", "prettier --write"],
-    "src-tauri/**/*.rs": ["cargo fmt --"]
+    "src-tauri/**/*.rs": ["cargo fmt --manifest-path src-tauri/Cargo.toml --"]
   },
   "dependencies": {
     "@tauri-apps/api": "^2",
