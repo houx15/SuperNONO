@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { listen } from '@tauri-apps/api/event';
+import { invoke } from '@tauri-apps/api/core';
 import { Sidebar } from './ui/Sidebar';
 import { IdleView } from './ui/IdleView';
 import { MeetingView } from './ui/MeetingView';
@@ -43,6 +44,11 @@ export default function App() {
   });
 
   const startMeeting = async () => {
+    try {
+      await invoke('prevent_sleep_enable', { reason: 'SuperNono meeting in progress' });
+    } catch {
+      /* non-Tauri env or plugin missing */
+    }
     const title = `Meeting · ${new Date().toLocaleString()}`;
     await session.start(title);
     setView('meeting');
@@ -67,6 +73,11 @@ export default function App() {
 
   const endMeeting = async () => {
     await session.stop();
+    try {
+      await invoke('prevent_sleep_disable');
+    } catch {
+      /* non-Tauri */
+    }
     // For M1, opening the export modal after stop needs the saved meeting record.
     // We read it back from disk to populate pastMeeting for the ExportModal.
     if (session.meetingId) {
