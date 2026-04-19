@@ -1342,3 +1342,15 @@ html, body {
 }
 .btn-recording:hover { background: color-mix(in srgb, var(--danger) 10%, var(--surface)); }
 .btn-recording:disabled { opacity: 1; }
+
+/* --------------------------------------------------------------
+   Window-drag regions — let titlebar be draggable, keep controls clickable
+   -------------------------------------------------------------- */
+.tl-dot,
+.icon-btn,
+button,
+input,
+select,
+textarea {
+  -webkit-app-region: no-drag;
+}
