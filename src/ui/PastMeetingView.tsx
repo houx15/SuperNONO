@@ -9,6 +9,8 @@ interface Props {
 }
 
 export function PastMeetingView({ meeting, onReExport }: Props) {
+  const isEmpty = meeting.summaries.length === 0 && meeting.aiExchanges.length === 0;
+
   return (
     <>
       <div className="main-toolbar">
@@ -37,6 +39,23 @@ export function PastMeetingView({ meeting, onReExport }: Props) {
               timestampLabel={new Date(x.t).toTimeString().slice(0, 8)}
             />
           ))}
+          {isEmpty && (
+            <div
+              style={{
+                padding: 'var(--s-6)',
+                color: 'var(--fg-muted)',
+                fontSize: 13,
+                textAlign: 'center',
+              }}
+            >
+              <div style={{ marginBottom: 8, fontWeight: 500 }}>No content captured</div>
+              <div style={{ fontSize: 12, color: 'var(--fg-faint)' }}>
+                This meeting ended before any summary cards or Q&A exchanges were generated. The
+                fixture replay demo runs much faster than the real 5-minute summary interval, so
+                summaries don&apos;t get produced during a 10-second replay.
+              </div>
+            </div>
+          )}
         </div>
       </main>
     </>

@@ -1,6 +1,5 @@
 import type { MeetingMeta } from '../logic/types';
 import { Icon } from './Icon';
-import { TrafficLights } from './TrafficLights';
 
 export interface SidebarProps {
   theme: 'light' | 'dark';
@@ -29,9 +28,9 @@ export function Sidebar(props: SidebarProps) {
 
   return (
     <aside className="sidebar">
-      <div className="sidebar-traffic">
-        <TrafficLights theme={theme} />
-      </div>
+      {/* Native macOS traffic lights overlay this space via titleBarStyle:"Overlay". */}
+      <div className="sidebar-traffic" />
+
       <div className="sidebar-head">
         <div className="sidebar-brand">
           <div className="sidebar-brand-mark" />

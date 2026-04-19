@@ -115,9 +115,13 @@ export default function App() {
   };
 
   const openPast = async (id: string) => {
-    const full = await fsAdapter.readMeeting(id);
-    setPastMeeting(full);
-    setView('past');
+    try {
+      const full = await fsAdapter.readMeeting(id);
+      setPastMeeting(full);
+      setView('past');
+    } catch (e) {
+      console.error('failed to open past meeting', id, e);
+    }
   };
 
   useEffect(() => {
