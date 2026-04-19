@@ -8,6 +8,9 @@
 .claude/*.local.*
 CLAUDE.local.md
 
+# Playwright MCP - ephemeral browser session data
+.playwright-mcp/
+
 # Codex CLI - local files (sessions, logs, config)
 .codex/*
 !.codex/skills/
@@ -132,3 +135,10 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# =============================================================================
+# PROJECT-SPECIFIC
+# =============================================================================
+
+# Raw designer handoff archive — contents are already tracked under docs/nono-design/
+docs/NONO-handoff.zip
