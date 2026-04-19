@@ -1,0 +1,109 @@
+/* SuperNono — design tokens
+   Extracted from prototype desktop.css + app.css (identical blocks, deduped).
+   All CSS variables for light + dark themes live here so future theme work
+   has a single source of truth. */
+
+/* --------------------------------------------------------------
+   Design tokens — LIGHT
+   -------------------------------------------------------------- */
+:root {
+  /* surfaces */
+  --bg:            #ffffff;
+  --bg-subtle:     #fafafa;   /* chrome panels */
+  --bg-sunken:     #f5f6f8;   /* inset, code blocks, transcript bar */
+  --surface:       #ffffff;   /* cards */
+  --surface-hover: #f7f8fa;
+
+  /* lines */
+  --border:        rgba(17, 24, 39, 0.08);
+  --border-strong: rgba(17, 24, 39, 0.14);
+  --border-focus:  rgba(17, 24, 39, 0.30);
+
+  /* text — slate scale */
+  --fg:            #0b0d12;
+  --fg-soft:       #1f2937;   /* body */
+  --fg-muted:      #4b5563;   /* secondary */
+  --fg-dim:        #6b7280;   /* meta */
+  --fg-faint:      #9ca3af;   /* placeholder / inactive */
+
+  /* accent — single hue (indigo/violet, Stripe-ish) */
+  --accent:        #635bff;
+  --accent-hover:  #524bdb;
+  --accent-soft:   rgba(99, 91, 255, 0.10);
+  --accent-ring:   rgba(99, 91, 255, 0.22);
+  --accent-fg:     #ffffff;
+
+  /* semantic */
+  --success:       #10b981;
+  --danger:        #ef4444;
+  --warning:       #f59e0b;
+
+  /* shadows — Stripe-style: tight, layered, low opacity */
+  --shadow-sm:  0 1px 2px rgba(17, 24, 39, 0.04), 0 1px 1px rgba(17, 24, 39, 0.04);
+  --shadow-md:  0 2px 4px rgba(17, 24, 39, 0.04), 0 4px 12px rgba(17, 24, 39, 0.06);
+  --shadow-lg:  0 4px 8px rgba(17, 24, 39, 0.04), 0 12px 32px rgba(17, 24, 39, 0.08);
+  --shadow-pop: 0 0 0 1px rgba(17, 24, 39, 0.06), 0 8px 24px rgba(17, 24, 39, 0.12);
+
+  /* type */
+  --sans:  'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --mono:  'JetBrains Mono', 'IBM Plex Mono', ui-monospace, 'SF Mono', monospace;
+  /* No serif in this system — removed for technical feel */
+
+  /* radii — tighter than editorial */
+  --r-xs: 4px;
+  --r-sm: 6px;
+  --r-md: 8px;
+  --r-lg: 12px;
+  --r-xl: 16px;
+
+  /* spacing scale (for consistent rhythm) */
+  --s-1: 4px;
+  --s-2: 8px;
+  --s-3: 12px;
+  --s-4: 16px;
+  --s-5: 20px;
+  --s-6: 24px;
+  --s-8: 32px;
+  --s-10: 40px;
+  --s-12: 48px;
+
+  color-scheme: light;
+}
+
+/* --------------------------------------------------------------
+   Design tokens — DARK
+   -------------------------------------------------------------- */
+[data-theme="dark"] {
+  --bg:            #0a0b0d;
+  --bg-subtle:     #0f1114;
+  --bg-sunken:     #141619;
+  --surface:       #131518;
+  --surface-hover: #181b1f;
+
+  --border:        rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.14);
+  --border-focus:  rgba(255, 255, 255, 0.32);
+
+  --fg:            #f5f6f8;
+  --fg-soft:       #e5e7eb;
+  --fg-muted:      #a1a8b3;
+  --fg-dim:        #737a85;
+  --fg-faint:      #4b5260;
+
+  --accent:        #8b85ff;
+  --accent-hover:  #9d97ff;
+  --accent-soft:   rgba(139, 133, 255, 0.14);
+  --accent-ring:   rgba(139, 133, 255, 0.28);
+  --accent-fg:     #0a0b0d;
+
+  --success:       #34d399;
+  --danger:        #f87171;
+  --warning:       #fbbf24;
+
+  --shadow-sm:  0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md:  0 2px 4px rgba(0, 0, 0, 0.3), 0 8px 16px rgba(0, 0, 0, 0.3);
+  --shadow-lg:  0 4px 8px rgba(0, 0, 0, 0.3), 0 16px 32px rgba(0, 0, 0, 0.4);
+  --shadow-pop: 0 0 0 1px rgba(255, 255, 255, 0.06), 0 8px 24px rgba(0, 0, 0, 0.5);
+
+  color-scheme: dark;
+}
