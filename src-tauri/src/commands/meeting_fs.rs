@@ -48,6 +48,62 @@ pub fn atomic_write(path: &Path, bytes: &[u8]) -> Result<(), FsError> {
     Ok(())
 }
 
+#[tauri::command]
+pub async fn meeting_create(app: AppHandle, id: String, meta_json: String) -> Result<(), FsError> {
+    let dir = meeting_dir(&app, &id)?;
+    atomic_write(&dir.join("meeting.json"), meta_json.as_bytes())?;
+    atomic_write(
+        &dir.join("summaries.json"),
+        br#"{"schema_version":1,"summaries":[]}"#,
+    )?;
+    atomic_write(
+        &dir.join("ai-exchanges.json"),
+        br#"{"schema_version":1,"exchanges":[]}"#,
+    )?;
+    // transcript.jsonl is append-only, created on first append
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn meeting_write_meta(
+    app: AppHandle,
+    id: String,
+    meta_json: String,
+) -> Result<(), FsError> {
+    let dir = meeting_dir(&app, &id)?;
+    atomic_write(&dir.join("meeting.json"), meta_json.as_bytes())?;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn meeting_write_summaries(
+    app: AppHandle,
+    id: String,
+    json: String,
+) -> Result<(), FsError> {
+    let dir = meeting_dir(&app, &id)?;
+    atomic_write(&dir.join("summaries.json"), json.as_bytes())?;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn meeting_write_minutes(app: AppHandle, id: String, md: String) -> Result<(), FsError> {
+    let dir = meeting_dir(&app, &id)?;
+    atomic_write(&dir.join("minutes.md"), md.as_bytes())?;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn meeting_write_ai_exchanges(
+    app: AppHandle,
+    id: String,
+    json: String,
+) -> Result<(), FsError> {
+    let dir = meeting_dir(&app, &id)?;
+    atomic_write(&dir.join("ai-exchanges.json"), json.as_bytes())?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

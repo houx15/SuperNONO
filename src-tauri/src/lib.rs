@@ -15,6 +15,11 @@ pub fn run() {
             commands::keychain::keychain_get,
             commands::keychain::keychain_set,
             commands::keychain::keychain_delete,
+            commands::meeting_fs::meeting_create,
+            commands::meeting_fs::meeting_write_meta,
+            commands::meeting_fs::meeting_write_summaries,
+            commands::meeting_fs::meeting_write_minutes,
+            commands::meeting_fs::meeting_write_ai_exchanges,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
