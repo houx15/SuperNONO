@@ -17,7 +17,12 @@ import { useMeetingSession } from './hooks/useMeetingSession';
 import { VolcanoAsrClient } from './adapters/VolcanoAsrClient';
 import { DoubaoE2eClient } from './adapters/DoubaoE2eClient';
 import { DoubaoLlmClient } from './adapters/DoubaoLlmClient';
+import { FixtureAsrClient } from './adapters/FixtureAsrClient';
 import { fsAdapter } from './adapters/FsAdapter';
+import { DevTweaks } from './ui/DevTweaks';
+import { FakeE2eClient } from './logic/__fakes__/FakeE2eClient';
+import { FakeLlmClient } from './logic/__fakes__/FakeLlmClient';
+import { loadAsrFixture, loadDoubaoRules } from './logic/fixtures';
 import type { FullMeeting } from './logic/types';
 
 type View = 'idle' | 'meeting' | 'past';
@@ -34,9 +39,22 @@ export default function App() {
   const [exportOpen, setExportOpen] = useState(false);
 
   const [sessionId] = useState(() => 'session_' + Math.random().toString(16).slice(2, 10));
-  const asr = useMemo(() => new VolcanoAsrClient(sessionId), [sessionId]);
-  const e2e = useMemo(() => new DoubaoE2eClient(sessionId), [sessionId]);
-  const llm = useMemo(() => new DoubaoLlmClient(settings.doubaoApiKey), [settings.doubaoApiKey]);
+  const [fixtureMode, setFixtureMode] = useState<{
+    asr: FixtureAsrClient;
+    e2e: FakeE2eClient;
+    llm: FakeLlmClient;
+  } | null>(null);
+
+  const realAsr = useMemo(() => new VolcanoAsrClient(sessionId), [sessionId]);
+  const realE2e = useMemo(() => new DoubaoE2eClient(sessionId), [sessionId]);
+  const realLlm = useMemo(
+    () => new DoubaoLlmClient(settings.doubaoApiKey),
+    [settings.doubaoApiKey],
+  );
+
+  const asr = fixtureMode?.asr ?? realAsr;
+  const e2e = fixtureMode?.e2e ?? realE2e;
+  const llm = fixtureMode?.llm ?? realLlm;
 
   const session = useMeetingSession({
     asr,
@@ -145,6 +163,33 @@ export default function App() {
     await fsAdapter.exportMinutes(pastMeeting.meta.id, target);
   };
 
+  const replayFixture = async () => {
+    const fixture = await loadAsrFixture('q2-strategy');
+    const rules = await loadDoubaoRules();
+    const fakeAsr = new FixtureAsrClient(fixture, 60); // 60x → 10min fixture in ~10s
+    const fakeE2e = new FakeE2eClient();
+    const fakeLlm = new FakeLlmClient(
+      rules.map((r) => ({ match: (p: string) => p.includes(r.match), text: r.text })),
+    );
+    setFixtureMode({ asr: fakeAsr, e2e: fakeE2e, llm: fakeLlm });
+
+    // Give React a tick to flush the adapter swap before starting the session.
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    await session.start(fixture.title);
+    setView('meeting');
+
+    if (fixture.qa && fixture.wakeWordAtEventIndex != null) {
+      const wakeWordAt = fixture.events[fixture.wakeWordAtEventIndex].atMs / 60;
+      setTimeout(() => {
+        fakeE2e.scriptTurn({
+          question: fixture.qa!.question,
+          answer: fixture.qa!.answer,
+          audioChunks: [],
+        });
+      }, wakeWordAt + 500);
+    }
+  };
+
   if (!loaded) return null;
 
   return (
@@ -222,6 +267,8 @@ export default function App() {
           onClose={() => setCrashModalOpen(false)}
         />
       )}
+
+      <DevTweaks onForceView={(v) => setView(v)} onReplayFixture={replayFixture} />
     </div>
   );
 }
