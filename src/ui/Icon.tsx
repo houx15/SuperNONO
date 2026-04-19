@@ -11,7 +11,8 @@ type IconName =
   | 'sun'
   | 'check'
   | 'link'
-  | 'clock';
+  | 'clock'
+  | 'panel-left';
 
 interface Props {
   name: IconName;
@@ -121,6 +122,13 @@ export function Icon({ name, size = 16 }: Props) {
         <svg {...common}>
           <circle cx="12" cy="12" r="10" />
           <polyline points="12 6 12 12 16 14" />
+        </svg>
+      );
+    case 'panel-left':
+      return (
+        <svg {...common}>
+          <rect x="3" y="3" width="18" height="18" rx="2" />
+          <line x1="9" y1="3" x2="9" y2="21" />
         </svg>
       );
     default:

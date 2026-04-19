@@ -23,6 +23,7 @@ import { DevTweaks } from './ui/DevTweaks';
 import { FakeE2eClient } from './logic/__fakes__/FakeE2eClient';
 import { FakeLlmClient } from './logic/__fakes__/FakeLlmClient';
 import { loadAsrFixture, loadDoubaoRules } from './logic/fixtures';
+import { Icon } from './ui/Icon';
 import type { FullMeeting } from './logic/types';
 
 type View = 'idle' | 'meeting' | 'past';
@@ -37,6 +38,24 @@ export default function App() {
   const [pastMeeting, setPastMeeting] = useState<FullMeeting | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(
+    () => localStorage.getItem('supernono.sidebarCollapsed') === 'true',
+  );
+
+  useEffect(() => {
+    localStorage.setItem('supernono.sidebarCollapsed', String(sidebarCollapsed));
+  }, [sidebarCollapsed]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'b') {
+        e.preventDefault();
+        setSidebarCollapsed((c) => !c);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   const [sessionId] = useState(() => 'session_' + Math.random().toString(16).slice(2, 10));
   const [fixtureMode, setFixtureMode] = useState<{
@@ -197,7 +216,7 @@ export default function App() {
   if (!loaded) return null;
 
   return (
-    <div className="app">
+    <div className={`app ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
       <Sidebar
         theme={theme}
         history={history}
@@ -209,6 +228,14 @@ export default function App() {
         onOpenSettings={() => setSettingsOpen(true)}
         isMeetingActive={view === 'meeting'}
       />
+      <button
+        className="sidebar-toggle"
+        onClick={() => setSidebarCollapsed((c) => !c)}
+        aria-label={sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'}
+        title={sidebarCollapsed ? 'Show sidebar (⌘B)' : 'Hide sidebar (⌘B)'}
+      >
+        <Icon name="panel-left" size={14} />
+      </button>
       <div className="main-pane">
         {view === 'idle' && <IdleView onStart={startMeeting} />}
         {view === 'meeting' && (

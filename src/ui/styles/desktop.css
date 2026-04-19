@@ -1372,3 +1372,46 @@ select,
 textarea {
   -webkit-app-region: no-drag;
 }
+
+/* --------------------------------------------------------------
+   Sidebar toggle — collapse/expand the history sidebar
+   -------------------------------------------------------------- */
+.sidebar-toggle {
+  position: absolute;
+  top: 12px;
+  left: 80px;            /* past macOS native traffic lights */
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--r-sm);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--fg-muted);
+  cursor: pointer;
+  z-index: 20;
+  transition:
+    background 0.12s,
+    color 0.12s,
+    border-color 0.12s;
+}
+.sidebar-toggle:hover {
+  background: var(--surface-hover);
+  color: var(--fg);
+  border-color: var(--border);
+}
+
+/* Smooth slide: collapse width to 0; children hide to avoid overflow glitches */
+.sidebar {
+  transition:
+    width 0.18s ease,
+    border-right-color 0.18s ease;
+}
+.app.sidebar-collapsed .sidebar {
+  width: 0;
+  border-right-color: transparent;
+}
+.app.sidebar-collapsed .sidebar > * {
+  display: none;
+}
