@@ -14,7 +14,12 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint 'src/**/*.{ts,tsx}'",
     "lint:fix": "eslint 'src/**/*.{ts,tsx}' --fix",
-    "format": "prettier --write 'src/**/*.{ts,tsx,css,json,md}'"
+    "format": "prettier --write 'src/**/*.{ts,tsx,css,json,md}'",
+    "prepare": "husky"
+  },
+  "lint-staged": {
+    "src/**/*.{ts,tsx}": ["eslint --fix", "prettier --write"],
+    "src-tauri/**/*.rs": ["cargo fmt --"]
   },
   "dependencies": {
     "@tauri-apps/api": "^2",
@@ -37,7 +42,9 @@
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^7.1.1",
+    "husky": "^9.1.7",
     "jsdom": "^26.1.0",
+    "lint-staged": "^16.4.0",
     "prettier": "^3.8.3",
     "typescript": "~5.8.3",
     "vite": "^7.0.4",
