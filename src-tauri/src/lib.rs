@@ -1,5 +1,6 @@
 mod commands;
 
+use commands::volcano_ws::{new_sessions as new_asr_sessions, AsrSessions};
 use tauri_plugin_global_shortcut::{Code, Modifiers, ShortcutState};
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
@@ -11,6 +12,7 @@ fn greet(name: &str) -> String {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .manage::<AsrSessions>(new_asr_sessions())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(

@@ -1,5 +1,76 @@
+use std::sync::Arc;
+
+use dashmap::DashMap;
+use futures_util::{SinkExt, StreamExt};
 use serde::{Deserialize, Serialize};
-use tauri::AppHandle;
+use serde_json::json;
+use tauri::{Emitter, State};
+use tokio::sync::mpsc;
+use tokio::task::JoinHandle;
+use tokio_tungstenite::{
+    connect_async,
+    tungstenite::{client::IntoClientRequest, protocol::Message},
+};
+use uuid::Uuid;
+
+pub struct AsrSession {
+    pub audio_tx: mpsc::Sender<Vec<u8>>,
+    pub _send_join: JoinHandle<()>,
+    pub _recv_join: JoinHandle<()>,
+}
+
+pub type AsrSessions = Arc<DashMap<String, AsrSession>>;
+
+pub fn new_sessions() -> AsrSessions {
+    Arc::new(DashMap::new())
+}
+
+const ASR_URL: &str = "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async";
+
+#[derive(Debug, Serialize, Clone)]
+pub struct TypedError {
+    pub kind: String,
+    pub message: String,
+    pub retryable: bool,
+}
+
+impl TypedError {
+    pub fn auth(msg: impl Into<String>) -> Self {
+        Self {
+            kind: "auth".into(),
+            message: msg.into(),
+            retryable: false,
+        }
+    }
+    pub fn network(msg: impl Into<String>) -> Self {
+        Self {
+            kind: "network".into(),
+            message: msg.into(),
+            retryable: true,
+        }
+    }
+    pub fn server(msg: impl Into<String>) -> Self {
+        Self {
+            kind: "server".into(),
+            message: msg.into(),
+            retryable: true,
+        }
+    }
+    pub fn protocol(msg: impl Into<String>) -> Self {
+        Self {
+            kind: "protocol".into(),
+            message: msg.into(),
+            retryable: false,
+        }
+    }
+    pub fn rate_limit(msg: impl Into<String>) -> Self {
+        Self {
+            kind: "rate_limit".into(),
+            message: msg.into(),
+            retryable: true,
+        }
+    }
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AsrStartParams {
@@ -236,32 +307,200 @@ pub mod frame {
 
 #[tauri::command]
 pub async fn asr_start(
-    _app: AppHandle,
-    _session_id: String,
-    _app_id: String,
-    _access_key: String,
-    _params: AsrStartParams,
+    app: tauri::AppHandle,
+    sessions: State<'_, AsrSessions>,
+    session_id: String,
+    app_id: String,
+    access_key: String,
+    params: AsrStartParams,
 ) -> Result<(), String> {
-    Err("asr_start: real connection implemented in M2".into())
+    let connect_id = Uuid::new_v4().to_string();
+    let mut req = ASR_URL.into_client_request().map_err(|e| e.to_string())?;
+    let h = req.headers_mut();
+    h.insert("X-Api-App-Key", app_id.parse().unwrap());
+    h.insert("X-Api-Access-Key", access_key.parse().unwrap());
+    h.insert(
+        "X-Api-Resource-Id",
+        "volc.bigasr.sauc.duration".parse().unwrap(),
+    );
+    h.insert("X-Api-Connect-Id", connect_id.parse().unwrap());
+
+    let (ws, _resp) = match connect_async(req).await {
+        Ok(ok) => ok,
+        Err(e) => {
+            let msg = e.to_string();
+            let kind = if msg.contains("401") || msg.contains("403") {
+                TypedError::auth(msg)
+            } else {
+                TypedError::network(msg)
+            };
+            app.emit("asr://error", kind).ok();
+            return Err("connect failed".into());
+        }
+    };
+
+    let (mut sink, mut stream) = ws.split();
+
+    // First frame: full client request with audio+request config.
+    let first_payload = json!({
+        "user": { "uid": "supernono" },
+        "audio": { "format": "pcm", "codec": "raw", "rate": 16000, "bits": 16, "channel": 1 },
+        "request": {
+            "model_name": "bigmodel",
+            "enable_punc": true,
+            "enable_itn": true,
+            "show_utterances": true,
+            "end_window_size": 800
+        }
+    });
+    let first_bytes = frame::encode_full_client_request(first_payload.to_string().as_bytes());
+    if let Err(e) = sink.send(Message::Binary(first_bytes.into())).await {
+        app.emit("asr://error", TypedError::network(e.to_string()))
+            .ok();
+        return Err("send first frame failed".into());
+    }
+
+    let (tx, mut rx) = mpsc::channel::<Vec<u8>>(32);
+
+    let app_send = app.clone();
+    let send_join: JoinHandle<()> = tokio::spawn(async move {
+        while let Some(pcm) = rx.recv().await {
+            let frame_bytes = frame::encode_audio_only(&pcm);
+            if let Err(e) = sink.send(Message::Binary(frame_bytes.into())).await {
+                app_send
+                    .emit("asr://error", TypedError::network(e.to_string()))
+                    .ok();
+                break;
+            }
+        }
+        let _ = sink.close().await;
+    });
+
+    let app_recv = app.clone();
+    let recv_join: JoinHandle<()> = tokio::spawn(async move {
+        while let Some(msg) = stream.next().await {
+            match msg {
+                Ok(Message::Binary(bytes)) => {
+                    if let Some(f) = frame::decode_server_frame(&bytes) {
+                        match f {
+                            frame::ServerFrame::Response { utterances, .. } => {
+                                for u in utterances {
+                                    let payload = serde_json::json!({
+                                        "text": u.text,
+                                        "startMs": u.start_time,
+                                        "endMs": u.end_time,
+                                        "isFinal": u.definite,
+                                    });
+                                    let ev = if u.definite {
+                                        "asr://final"
+                                    } else {
+                                        "asr://partial"
+                                    };
+                                    app_recv.emit(ev, payload).ok();
+                                }
+                            }
+                            frame::ServerFrame::Error { code, message } => {
+                                let kind = if code == 401 || code == 403 {
+                                    TypedError::auth(message)
+                                } else if code == 429 {
+                                    TypedError::rate_limit(message)
+                                } else if code >= 500 {
+                                    TypedError::server(message)
+                                } else {
+                                    TypedError::protocol(message)
+                                };
+                                app_recv.emit("asr://error", kind).ok();
+                            }
+                        }
+                    }
+                }
+                Ok(Message::Close(_)) => {
+                    app_recv.emit("asr://closed", ()).ok();
+                    break;
+                }
+                Err(e) => {
+                    app_recv
+                        .emit("asr://error", TypedError::network(e.to_string()))
+                        .ok();
+                    break;
+                }
+                _ => {}
+            }
+        }
+    });
+
+    sessions.insert(
+        session_id,
+        AsrSession {
+            audio_tx: tx,
+            _send_join: send_join,
+            _recv_join: recv_join,
+        },
+    );
+    let _ = params; // silence unused
+    Ok(())
 }
 
 #[tauri::command]
-pub async fn asr_send_audio(_session_id: String, _pcm_chunk: Vec<u8>) -> Result<(), String> {
-    Err("asr_send_audio: real connection implemented in M2".into())
+pub async fn asr_send_audio(
+    sessions: State<'_, AsrSessions>,
+    session_id: String,
+    pcm_chunk: Vec<u8>,
+) -> Result<(), String> {
+    if let Some(sess) = sessions.get(&session_id) {
+        // Drop on full channel — slightly better than backpressure for a live capture loop.
+        let _ = sess.audio_tx.try_send(pcm_chunk);
+        Ok(())
+    } else {
+        Err("session not found".into())
+    }
 }
 
 #[tauri::command]
-pub async fn asr_stop(_session_id: String) -> Result<(), String> {
-    Err("asr_stop: real connection implemented in M2".into())
+pub async fn asr_stop(sessions: State<'_, AsrSessions>, session_id: String) -> Result<(), String> {
+    sessions.remove(&session_id);
+    Ok(())
 }
 
 #[tauri::command]
 pub async fn asr_test_credentials(
-    _app_id: String,
-    _access_key: String,
+    app_id: String,
+    access_key: String,
 ) -> Result<TestResult, String> {
-    Ok(TestResult {
-        ok: false,
-        reason: Some("Not implemented until M2".into()),
-    })
+    let connect_id = Uuid::new_v4().to_string();
+    let mut req = match ASR_URL.into_client_request() {
+        Ok(r) => r,
+        Err(e) => {
+            return Ok(TestResult {
+                ok: false,
+                reason: Some(e.to_string()),
+            })
+        }
+    };
+    let h = req.headers_mut();
+    let _ = h.insert("X-Api-App-Key", app_id.parse().unwrap());
+    let _ = h.insert("X-Api-Access-Key", access_key.parse().unwrap());
+    let _ = h.insert(
+        "X-Api-Resource-Id",
+        "volc.bigasr.sauc.duration".parse().unwrap(),
+    );
+    let _ = h.insert("X-Api-Connect-Id", connect_id.parse().unwrap());
+    match tokio::time::timeout(std::time::Duration::from_secs(5), connect_async(req)).await {
+        Ok(Ok((ws, _))) => {
+            let (mut sink, _stream) = ws.split();
+            let _ = sink.close().await;
+            Ok(TestResult {
+                ok: true,
+                reason: None,
+            })
+        }
+        Ok(Err(e)) => Ok(TestResult {
+            ok: false,
+            reason: Some(e.to_string()),
+        }),
+        Err(_) => Ok(TestResult {
+            ok: false,
+            reason: Some("timeout".into()),
+        }),
+    }
 }
