@@ -3,9 +3,11 @@ import { Icon } from './Icon';
 
 interface Props {
   onStart: () => void;
+  lastError?: 'mic_denied' | 'other' | null;
+  onOpenMicSettings?: () => void;
 }
 
-export function IdleView({ onStart }: Props) {
+export function IdleView({ onStart, lastError, onOpenMicSettings }: Props) {
   return (
     <div className="idle-view">
       <div className="idle-inner">
@@ -16,6 +18,16 @@ export function IdleView({ onStart }: Props) {
         <div className="idle-sub">
           Start a session and SuperNono will listen, summarize and answer questions on demand.
         </div>
+        {lastError === 'mic_denied' && (
+          <div className="mic-help">
+            <h4>Microphone access denied</h4>
+            <p>
+              SuperNono needs your microphone to hear the meeting. Grant access in system settings,
+              then retry.
+            </p>
+            <button onClick={onOpenMicSettings}>Open system settings</button>
+          </div>
+        )}
         <button className="btn btn-primary btn-start" onClick={onStart}>
           <Icon name="mic" size={14} /> Start meeting
         </button>
