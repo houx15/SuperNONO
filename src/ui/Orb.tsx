@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, type CSSProperties } from 'react';
 import type { OrbState } from '../logic/types';
 
 interface Props {
   state: OrbState;
   size?: number;
+  amplitude?: number; // 0..1; when provided, opts into amplitude-driven scaling
 }
 
 const BAR_COUNT = 32;
@@ -87,7 +88,6 @@ function WaveformOrb({ state, size, t }: { state: OrbState; size: number; t: num
 
   return (
     <div
-      className="orb"
       style={{
         width: size,
         height: displayH,
@@ -200,7 +200,7 @@ function TriggerTick({ x, H, color }: { x: number; H: number; color: string }) {
   );
 }
 
-export function Orb({ state = 'idle', size = 170 }: Props) {
+export function Orb({ state = 'idle', size = 170, amplitude }: Props) {
   const [t, setT] = useState(0);
   useEffect(() => {
     let raf = 0;
@@ -212,5 +212,17 @@ export function Orb({ state = 'idle', size = 170 }: Props) {
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
   }, []);
-  return <WaveformOrb state={state} size={size} t={t} />;
+
+  // When amplitude is provided, inject the CSS custom property so CSS can scale.
+  // When amplitude is undefined, the existing timer animation stays untouched.
+  const amplitudeStyle: CSSProperties =
+    typeof amplitude === 'number'
+      ? ({ ['--amplitude' as string]: amplitude.toFixed(3) } as CSSProperties)
+      : {};
+
+  return (
+    <div className={`orb orb-${state}`} style={amplitudeStyle}>
+      <WaveformOrb state={state} size={size} t={t} />
+    </div>
+  );
 }

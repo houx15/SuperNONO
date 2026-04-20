@@ -1442,3 +1442,9 @@ textarea {
   cursor: col-resize !important;
   user-select: none !important;
 }
+
+/* --------------------------------------------------------------
+   Orb amplitude scaling (Task 22)
+   -------------------------------------------------------------- */
+.orb { --amplitude: 0; }
+.orb.orb-listening { transform: scale(calc(1 + var(--amplitude) * 0.08)); }

@@ -12,4 +12,16 @@ describe('Orb', () => {
       },
     );
   });
+
+  it('applies amplitude scale when amplitude prop provided', () => {
+    const { container } = render(<Orb state="activated" amplitude={0.5} />);
+    const root = container.querySelector('.orb');
+    expect(root?.getAttribute('style') ?? '').toMatch(/--amplitude:\s*0?\.5/);
+  });
+
+  it('falls back to timer animation when amplitude undefined', () => {
+    const { container } = render(<Orb state="activated" />);
+    const root = container.querySelector('.orb');
+    expect(root?.getAttribute('style') ?? '').not.toMatch(/--amplitude/);
+  });
 });
