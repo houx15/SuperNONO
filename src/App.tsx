@@ -194,25 +194,39 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view]);
 
+  const [endingMeeting, setEndingMeeting] = useState<null | {
+    phase: 'generating' | 'error';
+    message: string;
+  }>(null);
   const endMeeting = async () => {
-    await session.stop();
+    setEndingMeeting({ phase: 'generating', message: '正在生成会议纪要，请稍候…' });
     try {
-      await invoke('prevent_sleep_disable');
-    } catch {
-      /* non-Tauri */
-    }
-    // For M1, opening the export modal after stop needs the saved meeting record.
-    // We read it back from disk to populate pastMeeting for the ExportModal.
-    if (session.meetingId) {
+      await session.stop();
       try {
-        const full = await fsAdapter.readMeeting(session.meetingId);
-        setPastMeeting(full);
-        setExportOpen(true);
+        await invoke('prevent_sleep_disable');
       } catch {
-        /* fsAdapter may fail in non-Tauri env */
+        /* non-Tauri */
       }
+      if (session.meetingId) {
+        try {
+          const full = await fsAdapter.readMeeting(session.meetingId);
+          setPastMeeting(full);
+          setExportOpen(true);
+        } catch {
+          /* fsAdapter may fail in non-Tauri env */
+        }
+      }
+      await refreshHistory();
+      setEndingMeeting(null);
+      setView('idle');
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error('endMeeting failed:', e);
+      setEndingMeeting({
+        phase: 'error',
+        message: `结束会议时出错：${msg}。会议转写已保存，但纪要可能未生成。`,
+      });
     }
-    await refreshHistory();
   };
 
   const openPast = async (id: string) => {
@@ -400,6 +414,42 @@ export default function App() {
           }}
           onClose={() => setCrashModalOpen(false)}
         />
+      )}
+
+      {endingMeeting && (
+        <div className="modal-scrim">
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-head">
+              <div>
+                <h3>
+                  {endingMeeting.phase === 'generating' ? '正在结束会议' : '结束会议遇到问题'}
+                </h3>
+              </div>
+            </div>
+            <div className="modal-body">
+              <p style={{ fontSize: 13, lineHeight: 1.6 }}>{endingMeeting.message}</p>
+              {endingMeeting.phase === 'generating' && (
+                <div className="hint" style={{ marginTop: 8 }}>
+                  纪要由 LLM 生成，通常需要 5–15 秒。
+                </div>
+              )}
+            </div>
+            {endingMeeting.phase === 'error' && (
+              <div className="modal-foot">
+                <button
+                  className="btn btn-primary"
+                  onClick={async () => {
+                    setEndingMeeting(null);
+                    await refreshHistory();
+                    setView('idle');
+                  }}
+                >
+                  关闭
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
       )}
 
       <DevTweaks onForceView={(v) => setView(v)} onReplayFixture={replayFixture} />
