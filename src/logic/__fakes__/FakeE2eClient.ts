@@ -27,7 +27,10 @@ export class FakeE2eClient implements E2eClient {
     return () => this.listeners.get(event)?.delete(cb);
   }
 
-  async testCredentials(_apiKey: string) {
+  async testCredentials(
+    _appId: string,
+    _accessKey: string,
+  ): Promise<import('../types').TestResult> {
     return this.testResult;
   }
 
@@ -38,7 +41,7 @@ export class FakeE2eClient implements E2eClient {
     this.emit('turn_end', {});
   }
 
-  emitError(e: Error) {
+  emitError(e: import('../types').E2eError): void {
     this.emit('error', e);
   }
 

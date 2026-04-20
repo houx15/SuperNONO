@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { FakeE2eClient } from './FakeE2eClient';
+import type { E2eError } from '../types';
 
 describe('FakeE2eClient', () => {
   it('scripts a full turn', async () => {
@@ -21,4 +22,14 @@ describe('FakeE2eClient', () => {
     expect(kinds).toContain('audio');
     expect(kinds[kinds.length - 1]).toBe('turn_end');
   });
+});
+
+it('emits typed error', async () => {
+  const c = new FakeE2eClient();
+  await c.open({ systemPrompt: 'p', voice: 'v' });
+  const seen: E2eError[] = [];
+  c.on('error', (e) => seen.push(e as E2eError));
+  const err: E2eError = { kind: 'server', message: 'boom', retryable: true };
+  c.emitError(err);
+  expect(seen).toEqual([err]);
 });
