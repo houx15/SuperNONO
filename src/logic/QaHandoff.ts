@@ -19,10 +19,28 @@ export interface QaHandoffDeps {
   onAudioChunk?: (c: Uint8Array) => void;
 }
 
+/** Absolute ceiling on a single Q&A turn. If neither the server's
+ *  `turn_end` nor an `error` event arrives within this window, we force-
+ *  close and return to listening so a server hiccup can't freeze the
+ *  whole meeting. 45 s covers a leisurely question + generous answer. */
+const QA_HARD_TIMEOUT_MS = 45_000;
+
 export class QaHandoff {
   private active = false;
+  private cancelFn: (() => void) | null = null;
 
   constructor(private deps: QaHandoffDeps) {}
+
+  /** User-initiated cancel (ESC key, Cancel button). Resolves the in-flight
+   *  `trigger()` as if the server had sent `turn_end`. Safe to call when
+   *  nothing is active. */
+  cancel(): void {
+    this.cancelFn?.();
+  }
+
+  isActive(): boolean {
+    return this.active;
+  }
 
   async trigger(): Promise<void> {
     if (this.active) return;
@@ -40,6 +58,10 @@ export class QaHandoff {
 
     let question = '';
     let answer = '';
+    type EndReason = 'turn_end' | 'error' | 'timeout' | 'cancel';
+    // Wrapped in an object so TS control-flow analysis doesn't narrow
+    // the string literal and trip up the post-await comparisons.
+    const end: { reason: EndReason } = { reason: 'turn_end' };
 
     const cleanup: Array<() => void> = [];
     const hook = <T extends string>(event: T, fn: (p: unknown) => void) => {
@@ -59,14 +81,35 @@ export class QaHandoff {
       this.deps.onOrbState('speaking');
     });
 
+    let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
     await new Promise<void>((resolve) => {
-      hook('turn_end', () => resolve());
-      hook('error', () => resolve());
-      e2e.open({ systemPrompt, voice: E2E_DEFAULT_VOICE }).catch(() => resolve());
+      const done = (reason: EndReason) => {
+        end.reason = reason;
+        resolve();
+      };
+      // Server signals.
+      hook('turn_end', () => done('turn_end'));
+      hook('error', () => done('error'));
+      // User-initiated cancel.
+      this.cancelFn = () => done('cancel');
+      // Hard ceiling — protects against a server that never sends turn_end.
+      timeoutHandle = setTimeout(() => done('timeout'), QA_HARD_TIMEOUT_MS);
+      // Kick off E2E open. If the open itself fails, treat as error.
+      e2e.open({ systemPrompt, voice: E2E_DEFAULT_VOICE }).catch(() => done('error'));
     });
 
+    if (timeoutHandle) clearTimeout(timeoutHandle);
+    this.cancelFn = null;
     cleanup.forEach((fn) => fn());
     await e2e.close();
+
+    if (end.reason === 'timeout') {
+      // Surface on the exchange so it's visible the turn didn't finish
+      // cleanly. The meeting still continues.
+      if (!answer) answer = '(turn ended: server silent — returned to listening)';
+    } else if (end.reason === 'cancel') {
+      if (!answer) answer = '(cancelled)';
+    }
 
     const t = this.deps.clock.now();
     const exchange: AiExchange = { t, question, answer, cites: [] };

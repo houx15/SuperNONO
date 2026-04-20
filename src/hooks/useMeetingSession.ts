@@ -129,6 +129,10 @@ export function useMeetingSession(deps: UseMeetingSessionDeps) {
     }
   }, []);
 
+  const cancelQa = useCallback(() => {
+    sessionRef.current?.cancelQa();
+  }, []);
+
   useEffect(() => {
     if (!meetingId) return;
     const id = window.setInterval(() => setElapsedSec((s) => s + 1), 1000);
@@ -139,6 +143,7 @@ export function useMeetingSession(deps: UseMeetingSessionDeps) {
     start,
     stop,
     resume,
+    cancelQa,
     meetingId,
     summaries,
     activeSummary,

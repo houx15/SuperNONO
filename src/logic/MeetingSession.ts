@@ -56,6 +56,16 @@ export class MeetingSession {
     return this.router;
   }
 
+  /** Cancel an in-flight Q&A turn (user-initiated — ESC key or Cancel
+   *  button). No-op if no Q&A is active. */
+  cancelQa(): void {
+    this.qa?.cancel();
+  }
+
+  isQaActive(): boolean {
+    return this.qa?.isActive() ?? false;
+  }
+
   on(event: EventName, cb: Handler) {
     if (!this.listeners.has(event)) this.listeners.set(event, new Set());
     this.listeners.get(event)!.add(cb);

@@ -1,6 +1,7 @@
 import {
   useEffect,
   useMemo,
+  useRef,
   useState,
   type CSSProperties,
   type MouseEvent as ReactMouseEvent,
@@ -62,11 +63,27 @@ export default function App() {
     localStorage.setItem('supernono.sidebarWidth', String(sidebarWidth));
   }, [sidebarWidth]);
 
+  // Live refs for the keydown handler; populated below after `session`
+  // is constructed. Using refs keeps the listener stable across renders.
+  const sessionForKeyRef = useRef<{ orbState: string; cancelQa: () => void }>({
+    orbState: 'idle',
+    cancelQa: () => {},
+  });
+  const viewRef = useRef(view);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'b') {
         e.preventDefault();
         setSidebarWidth((w) => (w === 0 ? SIDEBAR_DEFAULT : 0));
+      } else if (
+        e.key === 'Escape' &&
+        viewRef.current === 'meeting' &&
+        sessionForKeyRef.current.orbState !== 'idle'
+      ) {
+        // Cancel in-flight Q&A (fallback for when the user accidentally
+        // triggered the wake word or wants to abort a long generation).
+        e.preventDefault();
+        sessionForKeyRef.current.cancelQa();
       }
     };
     window.addEventListener('keydown', onKey);
@@ -146,6 +163,15 @@ export default function App() {
     wakeWord: settings.wakeWord,
     lang: 'zh',
   });
+
+  // Keep the keydown handler's refs up to date. Updates happen in an
+  // effect (not during render) to satisfy react-hooks/refs.
+  useEffect(() => {
+    sessionForKeyRef.current = { orbState: session.orbState, cancelQa: session.cancelQa };
+  }, [session.orbState, session.cancelQa]);
+  useEffect(() => {
+    viewRef.current = view;
+  }, [view]);
 
   const startMeeting = async () => {
     try {
