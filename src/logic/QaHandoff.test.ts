@@ -7,7 +7,11 @@ import { FakeClock } from './__fakes__/FakeClock';
 import { TranscriptBuffer } from './TranscriptBuffer';
 
 describe('QaHandoff', () => {
-  it('runs a complete Q&A turn and resumes ASR', async () => {
+  it('runs a complete Q&A turn without tearing down ASR', async () => {
+    // Q&A handoff used to `asr.stop()` + `asr.start()` on each turn for
+    // latency reasons we can now skip: with AudioRouter, mic chunks are
+    // just redirected to E2E while ASR stays connected in the background.
+    // Saves ~1 s of handshake per Q&A.
     const asr = new FakeAsrClient();
     const e2e = new FakeE2eClient();
     const clock = new FakeClock(10_000);
@@ -28,25 +32,23 @@ describe('QaHandoff', () => {
       onExchange: (x) => exchanges.push(x),
     });
 
-    // Start the turn (does not resolve until e2e emits turn_end)
     const turnDone = qa.trigger();
-
-    // After microtask flush, ASR is stopped and e2e opened; emit the scripted turn.
     await flush();
     e2e.scriptTurn({
       question: 'Q?',
       answer: 'A.',
       audioChunks: [new Uint8Array([1])],
     });
-
     await turnDone;
 
-    expect(asrStopSpy).toHaveBeenCalled();
+    expect(asrStopSpy).not.toHaveBeenCalled();
+    // Only the initial `asr.start()` from the test setup; handoff no
+    // longer re-starts ASR.
+    expect(asrStartSpy).toHaveBeenCalledTimes(1);
     expect(orbStates).toEqual(
       expect.arrayContaining(['activated', 'thinking', 'speaking', 'idle']),
     );
     expect(exchanges.length).toBe(1);
-    expect(asrStartSpy).toHaveBeenCalledTimes(2); // initial + resume
   });
 
   it('switches router to e2e before opening, back to asr after turn_end', async () => {

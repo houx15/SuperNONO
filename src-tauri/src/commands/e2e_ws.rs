@@ -52,10 +52,14 @@ pub mod frame {
     }
 
     pub fn encode_start_session(session_id: &str, system_prompt: &str, voice: &str) -> Vec<u8> {
+        // Request pcm_s16le explicitly. The "pcm" format returns 32-bit float
+        // which is more ambiguous across providers; s16le is the most portable
+        // and decodes to clean audio with a simple int16→float conversion on
+        // the browser side.
         let payload = json!({
             "tts": {
                 "speaker": voice,
-                "audio_config": { "channel": 1, "format": "pcm", "sample_rate": 24000 }
+                "audio_config": { "channel": 1, "format": "pcm_s16le", "sample_rate": 24000 }
             },
             "dialog": {
                 "bot_name": "Nono",
@@ -185,7 +189,7 @@ pub mod frame {
             let payload = &bytes[payload_off + 4..payload_off + 4 + payload_size];
             let parsed: serde_json::Value = serde_json::from_slice(payload).unwrap();
             assert_eq!(parsed["tts"]["speaker"], "vv");
-            assert_eq!(parsed["tts"]["audio_config"]["format"], "pcm");
+            assert_eq!(parsed["tts"]["audio_config"]["format"], "pcm_s16le");
             assert_eq!(parsed["tts"]["audio_config"]["sample_rate"], 24000);
             assert_eq!(parsed["dialog"]["system_role"], "prompt");
         }

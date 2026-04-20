@@ -27,9 +27,13 @@ export class QaHandoff {
   async trigger(): Promise<void> {
     if (this.active) return;
     this.active = true;
+    // Route mic audio to E2E while Q&A runs. We deliberately do NOT close
+    // the ASR WS any more — a close/open cycle adds ~1 s to every Q&A for
+    // no real benefit; with the router swap, ASR just receives silence
+    // for the 3–5 s of the Q&A, which Volcano tolerates well within its
+    // inactivity window.
     this.deps.router?.switchTo('e2e');
     this.deps.onOrbState('activated');
-    await this.deps.asr.stop();
 
     const systemPrompt = this.buildSystemPrompt();
     const e2e = this.deps.e2e;
@@ -74,8 +78,8 @@ export class QaHandoff {
         this.deps.onTranscriptBridge({ t: t + 1, speaker: 'SuperNono', text: answer, final: true });
     }
 
+    // ASR stayed connected throughout; just route chunks back to it.
     this.deps.router?.switchTo('asr');
-    await this.deps.asr.start({ lang: 'zh', enableSpeakerId: true });
     this.deps.onOrbState('idle');
     this.active = false;
   }

@@ -150,37 +150,67 @@ pub async fn meeting_list(app: AppHandle) -> Result<Vec<serde_json::Value>, FsEr
         if !meta_path.exists() {
             continue;
         }
-        let bytes = fs::read(&meta_path)?;
-        let v: serde_json::Value = serde_json::from_slice(&bytes)?;
+        // Skip meetings whose meeting.json is unreadable or corrupt
+        // rather than failing the whole listing. This keeps the sidebar
+        // usable even if a previous crash left a half-written meta file.
+        let bytes = match fs::read(&meta_path) {
+            Ok(b) => b,
+            Err(_) => continue,
+        };
+        let v: serde_json::Value = match serde_json::from_slice(&bytes) {
+            Ok(v) => v,
+            Err(_) => continue,
+        };
         out.push(v);
     }
     Ok(out)
 }
 
+/// Parse JSON with a helpful error that tells the UI which file was bad
+/// and returns a clickable path the user can inspect or delete.
+fn parse_or_err(path: &Path, bytes: &[u8]) -> Result<serde_json::Value, FsError> {
+    serde_json::from_slice(bytes).map_err(|e| FsError::Path(format!("{}: {e}", path.display())))
+}
+
 #[tauri::command]
 pub async fn meeting_read(app: AppHandle, id: String) -> Result<FullMeetingPayload, FsError> {
     let dir = meeting_dir(&app, &id)?;
-    let meta: serde_json::Value = serde_json::from_slice(&fs::read(dir.join("meeting.json"))?)?;
-    let summaries: serde_json::Value = serde_json::from_slice(
+    let meta = parse_or_err(
+        &dir.join("meeting.json"),
+        &fs::read(dir.join("meeting.json"))?,
+    )?;
+    let summaries = parse_or_err(
+        &dir.join("summaries.json"),
         &fs::read(dir.join("summaries.json"))
             .unwrap_or_else(|_| b"{\"schema_version\":1,\"summaries\":[]}".to_vec()),
     )?;
-    let ai_exchanges: serde_json::Value = serde_json::from_slice(
+    let ai_exchanges = parse_or_err(
+        &dir.join("ai-exchanges.json"),
         &fs::read(dir.join("ai-exchanges.json"))
             .unwrap_or_else(|_| b"{\"schema_version\":1,\"exchanges\":[]}".to_vec()),
     )?;
     let minutes_md = fs::read_to_string(dir.join("minutes.md")).ok();
 
+    // transcript.jsonl is append-only and written one line per utterance.
+    // If a single line is malformed (e.g. earlier bug, partial write on
+    // crash), skip it and continue. We still return the rest so the user
+    // sees as much of the meeting as possible.
     let mut transcript = Vec::new();
     let tr_path = dir.join("transcript.jsonl");
     if tr_path.exists() {
-        let text = fs::read_to_string(tr_path)?;
+        let text = fs::read_to_string(&tr_path)?;
         for line in text.lines() {
-            if line.trim().is_empty() {
+            let trimmed = line.trim();
+            if trimmed.is_empty() {
                 continue;
             }
-            let v: serde_json::Value = serde_json::from_str(line)?;
-            transcript.push(v);
+            match serde_json::from_str::<serde_json::Value>(trimmed) {
+                Ok(v) => transcript.push(v),
+                Err(_) => {
+                    // Malformed line — skip, don't fail the whole read.
+                    continue;
+                }
+            }
         }
     }
 
