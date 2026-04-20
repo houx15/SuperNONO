@@ -15,6 +15,7 @@ export interface QaHandoffDeps {
   onOrbState: (s: OrbState) => void;
   onExchange: (x: AiExchange) => void;
   onTranscriptBridge?: (u: Utterance) => void;
+  onAudioChunk?: (c: Uint8Array) => void;
 }
 
 export class QaHandoff {
@@ -48,7 +49,8 @@ export class QaHandoff {
     hook('answer_transcript', (p) => {
       answer = (p as { text: string }).text ?? '';
     });
-    hook('audio', () => {
+    hook('audio', (c) => {
+      this.deps.onAudioChunk?.(c as Uint8Array);
       this.deps.onOrbState('speaking');
     });
 

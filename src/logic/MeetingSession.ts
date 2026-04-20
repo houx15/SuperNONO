@@ -25,6 +25,7 @@ export interface MeetingSessionDeps {
   clock: Clock;
   mic: MicCaptureHandle;
   config: MeetingSessionConfig;
+  audioPlayer?: { enqueue(c: Uint8Array): void; stop(): void };
 }
 
 export class MeetingSession {
@@ -121,6 +122,7 @@ export class MeetingSession {
         this.emit('qa', x);
       },
       onTranscriptBridge: (u) => void this.persistUtterance(u),
+      onAudioChunk: (c) => this.deps.audioPlayer?.enqueue(c),
     });
 
     await this.deps.mic.start();
