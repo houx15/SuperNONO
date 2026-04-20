@@ -1,61 +1,47 @@
+import { invoke } from '@tauri-apps/api/core';
+import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import type { MicCaptureHandle, Unsubscribe } from '../logic/adapters';
-
-export interface MicCaptureDeps {
-  contextFactory: () => AudioContext;
-  getUserMedia: (constraints: MediaStreamConstraints) => Promise<MediaStream>;
-  workletUrl: string;
-  buildNode?: (ctx: AudioContext) => AudioWorkletNode;
-}
 
 type Ev = 'chunk' | 'rms' | 'error';
 
+/**
+ * Subscribes to native cpal events emitted from Rust. The browser mic APIs
+ * (`navigator.mediaDevices.getUserMedia`) are not available in Tauri 2's
+ * WKWebView on macOS, so mic capture runs in Rust via cpal and sends chunks
+ * up via Tauri events. This class mirrors the previous AudioWorklet-based
+ * implementation's external contract.
+ */
 export class MicCapture implements MicCaptureHandle {
-  private ctx: AudioContext | null = null;
-  private stream: MediaStream | null = null;
-  private node: AudioWorkletNode | null = null;
+  private unlistens: UnlistenFn[] = [];
   private listeners = new Map<Ev, Set<(p: never) => void>>();
 
-  constructor(private deps: MicCaptureDeps) {}
-
   async start(): Promise<void> {
-    this.stream = await this.deps.getUserMedia({
-      audio: {
-        channelCount: 1,
-        echoCancellation: true,
-        noiseSuppression: true,
-        autoGainControl: false,
-      },
-    });
-    this.ctx = this.deps.contextFactory();
-    await this.ctx.audioWorklet.addModule(this.deps.workletUrl);
-    const source = this.ctx.createMediaStreamSource(this.stream);
-    this.node = this.deps.buildNode
-      ? this.deps.buildNode(this.ctx)
-      : new AudioWorkletNode(this.ctx, 'downsample-processor');
-    this.node.port.onmessage = (ev) => {
-      const msg = ev.data as { type: 'chunk' | 'rms'; buffer?: ArrayBuffer; value?: number };
-      if (msg.type === 'chunk' && msg.buffer) {
-        this.emit('chunk', new Uint8Array(msg.buffer));
-      } else if (msg.type === 'rms' && typeof msg.value === 'number') {
-        this.emit('rms', msg.value);
-      }
-    };
-    source.connect(this.node);
+    this.unlistens.push(
+      await listen<number[]>('mic://chunk', (e) => {
+        this.emit('chunk', new Uint8Array(e.payload));
+      }),
+    );
+    this.unlistens.push(
+      await listen<number>('mic://rms', (e) => {
+        this.emit('rms', e.payload);
+      }),
+    );
+    this.unlistens.push(
+      await listen<string>('mic://error', (e) => {
+        this.emit('error', new Error(e.payload));
+      }),
+    );
+    await invoke('mic_start');
   }
 
   async stop(): Promise<void> {
-    if (this.node) {
-      this.node.disconnect();
-      this.node = null;
+    try {
+      await invoke('mic_stop');
+    } catch {
+      /* best effort */
     }
-    if (this.stream) {
-      for (const t of this.stream.getTracks()) t.stop();
-      this.stream = null;
-    }
-    if (this.ctx && this.ctx.state !== 'closed') {
-      await this.ctx.close();
-    }
-    this.ctx = null;
+    for (const u of this.unlistens) u();
+    this.unlistens = [];
   }
 
   on(event: 'chunk', cb: (c: Uint8Array) => void): Unsubscribe;

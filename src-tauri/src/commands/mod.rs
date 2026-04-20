@@ -2,6 +2,7 @@ pub mod e2e_ws;
 pub mod keychain;
 pub mod llm_http;
 pub mod meeting_fs;
+pub mod mic;
 pub mod prevent_sleep;
 pub mod settings_link;
 pub mod volcano_ws;

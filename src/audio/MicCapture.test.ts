@@ -1,103 +1,78 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { MicCapture } from './MicCapture';
 
-// A minimal fake of the AudioContext surface we use.
-class FakeWorkletPort {
-  onmessage: ((ev: MessageEvent) => void) | null = null;
-  fire(data: unknown) {
-    this.onmessage?.({ data } as MessageEvent);
-  }
-}
-class FakeWorkletNode {
-  port = new FakeWorkletPort();
-  connect = vi.fn();
-  disconnect = vi.fn();
-}
-class FakeMediaStreamSource {
-  connect = vi.fn();
-  disconnect = vi.fn();
-}
-class FakeAudioContext {
-  state: 'suspended' | 'running' | 'closed' = 'running';
-  audioWorklet = { addModule: vi.fn().mockResolvedValue(undefined) };
-  createMediaStreamSource = vi.fn(() => new FakeMediaStreamSource());
-  close = vi.fn();
-  workletNode = new FakeWorkletNode();
-}
+type EventCb<T> = (e: { payload: T }) => void;
+
+const listenHandlers = new Map<string, EventCb<unknown>>();
+
+vi.mock('@tauri-apps/api/core', () => ({
+  invoke: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock('@tauri-apps/api/event', () => ({
+  listen: vi.fn((name: string, cb: EventCb<unknown>) => {
+    listenHandlers.set(name, cb);
+    return Promise.resolve(() => {
+      listenHandlers.delete(name);
+    });
+  }),
+}));
+
+import { invoke } from '@tauri-apps/api/core';
+const invokeMock = invoke as unknown as ReturnType<typeof vi.fn>;
+
+beforeEach(() => {
+  listenHandlers.clear();
+  invokeMock.mockClear();
+});
 
 describe('MicCapture', () => {
-  let ctx: FakeAudioContext;
-  let getStream: ReturnType<typeof vi.fn>;
-  let buildNode: ReturnType<typeof vi.fn>;
-
-  beforeEach(() => {
-    ctx = new FakeAudioContext();
-    getStream = vi.fn().mockResolvedValue({ getTracks: () => [{ stop: vi.fn() }] });
-    buildNode = vi.fn().mockReturnValue(ctx.workletNode);
-  });
-
-  it('starts, adds worklet, wires node', async () => {
-    const m = new MicCapture({
-      contextFactory: () => ctx as unknown as AudioContext,
-      getUserMedia: getStream as unknown as (c: MediaStreamConstraints) => Promise<MediaStream>,
-      workletUrl: '/worklet/downsample-worklet.js',
-      buildNode: buildNode as unknown as (ctx: AudioContext) => AudioWorkletNode,
-    });
+  it('invokes mic_start on start() and mic_stop on stop()', async () => {
+    const m = new MicCapture();
     await m.start();
-    expect(ctx.audioWorklet.addModule).toHaveBeenCalledWith('/worklet/downsample-worklet.js');
-    expect(buildNode).toHaveBeenCalled();
+    expect(invokeMock).toHaveBeenCalledWith('mic_start');
+    await m.stop();
+    expect(invokeMock).toHaveBeenCalledWith('mic_stop');
   });
 
-  it('emits chunk from worklet port message', async () => {
-    const m = new MicCapture({
-      contextFactory: () => ctx as unknown as AudioContext,
-      getUserMedia: getStream as unknown as (c: MediaStreamConstraints) => Promise<MediaStream>,
-      workletUrl: '/worklet/downsample-worklet.js',
-      buildNode: buildNode as unknown as (ctx: AudioContext) => AudioWorkletNode,
-    });
+  it('routes mic://chunk event to chunk listener as Uint8Array', async () => {
+    const m = new MicCapture();
     await m.start();
     const chunks: Uint8Array[] = [];
     m.on('chunk', (c) => chunks.push(c));
-    const buf = new Int16Array([1, -1, 2]).buffer;
-    ctx.workletNode.port.fire({ type: 'chunk', buffer: buf });
+    const handler = listenHandlers.get('mic://chunk') as EventCb<number[]>;
+    handler({ payload: [1, 2, 3, 4] });
     expect(chunks.length).toBe(1);
-    expect(chunks[0].byteLength).toBe(6);
+    expect(Array.from(chunks[0])).toEqual([1, 2, 3, 4]);
   });
 
-  it('emits rms', async () => {
-    const m = new MicCapture({
-      contextFactory: () => ctx as unknown as AudioContext,
-      getUserMedia: getStream as unknown as (c: MediaStreamConstraints) => Promise<MediaStream>,
-      workletUrl: '/worklet/downsample-worklet.js',
-      buildNode: buildNode as unknown as (ctx: AudioContext) => AudioWorkletNode,
-    });
+  it('routes mic://rms event to rms listener', async () => {
+    const m = new MicCapture();
     await m.start();
-    const seen: number[] = [];
-    m.on('rms', (r) => seen.push(r));
-    ctx.workletNode.port.fire({ type: 'rms', value: 0.42 });
-    expect(seen).toEqual([0.42]);
+    const levels: number[] = [];
+    m.on('rms', (r) => levels.push(r));
+    const handler = listenHandlers.get('mic://rms') as EventCb<number>;
+    handler({ payload: 0.42 });
+    handler({ payload: 0.7 });
+    expect(levels).toEqual([0.42, 0.7]);
   });
 
-  it('stop closes audio resources', async () => {
-    const m = new MicCapture({
-      contextFactory: () => ctx as unknown as AudioContext,
-      getUserMedia: getStream as unknown as (c: MediaStreamConstraints) => Promise<MediaStream>,
-      workletUrl: '/worklet/downsample-worklet.js',
-      buildNode: buildNode as unknown as (ctx: AudioContext) => AudioWorkletNode,
-    });
+  it('routes mic://error event to error listener as Error', async () => {
+    const m = new MicCapture();
     await m.start();
+    const errors: Error[] = [];
+    m.on('error', (e) => errors.push(e));
+    const handler = listenHandlers.get('mic://error') as EventCb<string>;
+    handler({ payload: 'no default input device' });
+    expect(errors.length).toBe(1);
+    expect(errors[0].message).toBe('no default input device');
+  });
+
+  it('unsubscribes listen handlers on stop()', async () => {
+    const m = new MicCapture();
+    await m.start();
+    expect(listenHandlers.size).toBe(3);
     await m.stop();
-    expect(ctx.close).toHaveBeenCalled();
-  });
-
-  it('emits error event when getUserMedia rejects', async () => {
-    const failing = vi.fn().mockRejectedValue(new Error('NotAllowedError'));
-    const m = new MicCapture({
-      contextFactory: () => ctx as unknown as AudioContext,
-      getUserMedia: failing as unknown as (c: MediaStreamConstraints) => Promise<MediaStream>,
-      workletUrl: '/worklet/downsample-worklet.js',
-      buildNode: buildNode as unknown as (ctx: AudioContext) => AudioWorkletNode,
-    });
-    await expect(m.start()).rejects.toThrow('NotAllowedError');
+    expect(listenHandlers.size).toBe(0);
   });
 });

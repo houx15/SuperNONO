@@ -135,15 +135,7 @@ export default function App() {
   const asr = fixtureMode?.asr ?? realAsr;
   const e2e = fixtureMode?.e2e ?? realE2e;
   const llm = fixtureMode?.llm ?? realLlm;
-  const mic = useMemo(
-    () =>
-      new MicCapture({
-        contextFactory: () => new AudioContext(),
-        getUserMedia: (c) => navigator.mediaDevices.getUserMedia(c),
-        workletUrl: '/worklet/downsample-worklet.js',
-      }),
-    [],
-  );
+  const mic = useMemo(() => new MicCapture(), []);
 
   const session = useMeetingSession({
     asr,

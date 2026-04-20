@@ -36,6 +36,7 @@ uuid = { version = "1", features = ["v4"] }
 dashmap = "6"
 bytes = "1"
 tauri-plugin-dialog = "2.7.0"
+cpal = "0.15"
 
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.58", features = ["Win32_System_Power"] }

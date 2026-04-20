@@ -1,6 +1,7 @@
 mod commands;
 
 use commands::e2e_ws::{new_e2e_sessions, E2eSessions};
+use commands::mic::{new_mic, MicHandle};
 use commands::volcano_ws::{new_sessions as new_asr_sessions, AsrSessions};
 use tauri_plugin_global_shortcut::{Code, Modifiers, ShortcutState};
 
@@ -15,6 +16,7 @@ pub fn run() {
     tauri::Builder::default()
         .manage::<AsrSessions>(new_asr_sessions())
         .manage::<E2eSessions>(new_e2e_sessions())
+        .manage::<MicHandle>(new_mic())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(
@@ -63,6 +65,8 @@ pub fn run() {
             commands::e2e_ws::e2e_test_credentials,
             commands::llm_http::llm_complete,
             commands::llm_http::llm_test_credentials,
+            commands::mic::mic_start,
+            commands::mic::mic_stop,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
