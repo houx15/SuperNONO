@@ -1,5 +1,6 @@
 mod commands;
 
+use commands::e2e_ws::{new_e2e_sessions, E2eSessions};
 use commands::volcano_ws::{new_sessions as new_asr_sessions, AsrSessions};
 use tauri_plugin_global_shortcut::{Code, Modifiers, ShortcutState};
 
@@ -13,6 +14,7 @@ fn greet(name: &str) -> String {
 pub fn run() {
     tauri::Builder::default()
         .manage::<AsrSessions>(new_asr_sessions())
+        .manage::<E2eSessions>(new_e2e_sessions())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(
