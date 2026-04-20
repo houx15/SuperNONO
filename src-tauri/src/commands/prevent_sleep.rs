@@ -45,6 +45,35 @@ mod mac {
     }
 }
 
+#[cfg(target_os = "windows")]
+mod win {
+    use windows::Win32::System::Power::{
+        SetThreadExecutionState, ES_CONTINUOUS, ES_DISPLAY_REQUIRED, ES_SYSTEM_REQUIRED,
+        EXECUTION_STATE,
+    };
+
+    pub fn start() -> Result<(), String> {
+        // SAFETY: Win32 API, no pointers; EXECUTION_STATE is a u32 bitfield.
+        let prev = unsafe {
+            SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED | ES_DISPLAY_REQUIRED)
+        };
+        if prev == EXECUTION_STATE(0) {
+            Err("SetThreadExecutionState failed".into())
+        } else {
+            Ok(())
+        }
+    }
+
+    pub fn stop() -> Result<(), String> {
+        let prev = unsafe { SetThreadExecutionState(ES_CONTINUOUS) };
+        if prev == EXECUTION_STATE(0) {
+            Err("SetThreadExecutionState clear failed".into())
+        } else {
+            Ok(())
+        }
+    }
+}
+
 static ACTIVE: Lazy<Mutex<Option<u32>>> = Lazy::new(|| Mutex::new(None));
 
 #[tauri::command]
@@ -61,10 +90,14 @@ pub async fn prevent_sleep_enable(_reason: String) -> Result<(), String> {
             return Err("IOPMAssertionCreateWithName failed".into());
         }
     }
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(target_os = "windows")]
     {
-        // Windows: TODO — SetThreadExecutionState. Linux: TODO — systemd-inhibit.
-        // For M1, Windows/Linux are a no-op; meeting proceeds without sleep prevention.
+        win::start()?;
+        let _ = _reason;
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    {
+        // Linux: TODO — systemd-inhibit. No-op for now; meeting proceeds without sleep prevention.
         let _ = _reason;
     }
     Ok(())
@@ -79,5 +112,19 @@ pub async fn prevent_sleep_disable() -> Result<(), String> {
             mac::disable(id);
         }
     }
+    #[cfg(target_os = "windows")]
+    {
+        win::stop()?;
+    }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn windows_start_stop_round_trip() {
+        super::win::start().unwrap();
+        super::win::stop().unwrap();
+    }
 }
