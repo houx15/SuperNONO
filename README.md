@@ -2,12 +2,15 @@
 
 Offline meeting assistant — Tauri 2 desktop app.
 
-## Status: M1 (autonomous, fake-drivable)
+## Status
 
-- Full UI ported from design prototype (Sidebar, Idle, Meeting, Past, Settings, Export)
-- Full TS product logic, TDD, no real API calls
-- Rust bridges live except the two WebSocket connection paths (stubbed until M2)
-- A dev-only fixture replay demo runs a scripted 10-minute meeting end-to-end
+**M2 shipped** — real Volcano ASR + Doubao E2E Realtime + Doubao LLM, mic
+capture via AudioWorklet, credential test buttons, WS reconnect with
+backoff, Windows prevent-sleep. See `docs/manual-smoke-m2.md` for the
+verification checklist.
+
+Requires: Volcano App ID + Access Key, Doubao API key (entered in
+Settings → keychain). macOS or Windows. Node 22.14+ with pnpm 10.29+.
 
 ## Run
 
