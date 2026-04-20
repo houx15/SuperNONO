@@ -1,45 +1,31 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { DoubaoLlmClient } from './DoubaoLlmClient';
 
+vi.mock('@tauri-apps/api/core', () => ({
+  invoke: vi.fn(),
+}));
+
+import { invoke } from '@tauri-apps/api/core';
+const invokeMock = invoke as unknown as ReturnType<typeof vi.fn>;
+
 describe('DoubaoLlmClient.complete', () => {
-  let originalFetch: typeof fetch;
   beforeEach(() => {
-    originalFetch = globalThis.fetch;
-  });
-  afterEach(() => {
-    globalThis.fetch = originalFetch;
+    invokeMock.mockReset();
   });
 
-  it('POSTs to Ark with Bearer auth + default model', async () => {
-    const fetchSpy = vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      json: async () => ({ choices: [{ message: { content: 'hi there' } }] }),
-    });
-    globalThis.fetch = fetchSpy as unknown as typeof fetch;
-
+  it('invokes doubao_complete with apiKey + prompt, returns text', async () => {
+    invokeMock.mockResolvedValue({ text: 'hi there' });
     const c = new DoubaoLlmClient('sk-key');
     const resp = await c.complete({ prompt: 'hello' });
-
     expect(resp.text).toBe('hi there');
-    expect(fetchSpy).toHaveBeenCalledTimes(1);
-    const [url, init] = fetchSpy.mock.calls[0];
-    expect(url).toBe('https://ark.cn-beijing.volces.com/api/v3/chat/completions');
-    expect(init.method).toBe('POST');
-    expect(init.headers['Authorization']).toBe('Bearer sk-key');
-    expect(init.headers['Content-Type']).toBe('application/json');
-    const body = JSON.parse(init.body);
-    expect(body.model).toBe('doubao-1-5-pro-256k');
-    expect(body.messages).toEqual([{ role: 'user', content: 'hello' }]);
-    expect(body.stream).toBe(false);
+    expect(invokeMock).toHaveBeenCalledWith('doubao_complete', {
+      apiKey: 'sk-key',
+      prompt: 'hello',
+    });
   });
 
-  it('surfaces 401 as auth error', async () => {
-    globalThis.fetch = vi.fn().mockResolvedValue({
-      ok: false,
-      status: 401,
-      text: async () => '{"error":{"message":"bad key"}}',
-    }) as unknown as typeof fetch;
+  it('surfaces HTTP 401 from Rust as auth error', async () => {
+    invokeMock.mockRejectedValue('HTTP 401 Unauthorized: bad key');
     const c = new DoubaoLlmClient('bad');
     await expect(c.complete({ prompt: 'x' })).rejects.toMatchObject({
       kind: 'auth',
@@ -47,12 +33,8 @@ describe('DoubaoLlmClient.complete', () => {
     });
   });
 
-  it('surfaces 429 as rate_limit retryable', async () => {
-    globalThis.fetch = vi.fn().mockResolvedValue({
-      ok: false,
-      status: 429,
-      text: async () => 'throttled',
-    }) as unknown as typeof fetch;
+  it('surfaces HTTP 429 as rate_limit retryable', async () => {
+    invokeMock.mockRejectedValue('HTTP 429 Too Many Requests: throttled');
     const c = new DoubaoLlmClient('k');
     await expect(c.complete({ prompt: 'x' })).rejects.toMatchObject({
       kind: 'rate_limit',
@@ -60,12 +42,8 @@ describe('DoubaoLlmClient.complete', () => {
     });
   });
 
-  it('surfaces 5xx as server retryable', async () => {
-    globalThis.fetch = vi.fn().mockResolvedValue({
-      ok: false,
-      status: 503,
-      text: async () => 'down',
-    }) as unknown as typeof fetch;
+  it('surfaces HTTP 503 as server retryable', async () => {
+    invokeMock.mockRejectedValue('HTTP 503 Service Unavailable: down');
     const c = new DoubaoLlmClient('k');
     await expect(c.complete({ prompt: 'x' })).rejects.toMatchObject({
       kind: 'server',
@@ -74,9 +52,7 @@ describe('DoubaoLlmClient.complete', () => {
   });
 
   it('surfaces network failure', async () => {
-    globalThis.fetch = vi
-      .fn()
-      .mockRejectedValue(new TypeError('Failed to fetch')) as unknown as typeof fetch;
+    invokeMock.mockRejectedValue('network: connection refused');
     const c = new DoubaoLlmClient('k');
     await expect(c.complete({ prompt: 'x' })).rejects.toMatchObject({
       kind: 'network',
@@ -87,66 +63,39 @@ describe('DoubaoLlmClient.complete', () => {
   it('throws if API key null (not configured)', async () => {
     const c = new DoubaoLlmClient(null);
     await expect(c.complete({ prompt: 'x' })).rejects.toThrow('Doubao API key not configured');
+    expect(invokeMock).not.toHaveBeenCalled();
   });
 });
 
 describe('DoubaoLlmClient.testCredentials', () => {
-  afterEach(() => {
-    /* cleanup */
+  beforeEach(() => {
+    invokeMock.mockReset();
   });
-  it('returns ok on 200', async () => {
-    globalThis.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      json: async () => ({ choices: [{ message: { content: 'ok' } }] }),
-    }) as unknown as typeof fetch;
+
+  it('returns ok on Rust OK result', async () => {
+    invokeMock.mockResolvedValue({ ok: true, reason: null });
     const c = new DoubaoLlmClient(null);
     const r = await c.testCredentials('sk-valid');
     expect(r.ok).toBe(true);
+    expect(invokeMock).toHaveBeenCalledWith('doubao_test_credentials', { apiKey: 'sk-valid' });
   });
-  it('returns !ok with reason on 401', async () => {
-    globalThis.fetch = vi.fn().mockResolvedValue({
-      ok: false,
-      status: 401,
-      text: async () => 'bad',
-    }) as unknown as typeof fetch;
+
+  it('returns !ok with reason on Rust failure result', async () => {
+    invokeMock.mockResolvedValue({ ok: false, reason: 'HTTP 401' });
     const c = new DoubaoLlmClient(null);
     const r = await c.testCredentials('sk-bad');
     expect(r.ok).toBe(false);
-    expect(r.reason).toMatch(/401|auth|key/i);
-  });
-  it('returns !ok with reason on network fail', async () => {
-    globalThis.fetch = vi.fn().mockRejectedValue(new TypeError('fail')) as unknown as typeof fetch;
-    const c = new DoubaoLlmClient(null);
-    const r = await c.testCredentials('sk');
-    expect(r.ok).toBe(false);
-    expect(r.reason).toBeTruthy();
+    expect(r.reason).toMatch(/401/);
   });
 });
 
 describe('DoubaoLlmClient.stream', () => {
-  it('yields delta chunks from SSE', async () => {
-    const body = [
-      'data: {"choices":[{"delta":{"content":"Hel"}}]}\n\n',
-      'data: {"choices":[{"delta":{"content":"lo"}}]}\n\n',
-      'data: [DONE]\n\n',
-    ].join('');
-    const encoded = new TextEncoder().encode(body);
-    const reader = {
-      _done: false,
-      async read() {
-        if (this._done) return { done: true, value: undefined };
-        this._done = true;
-        return { done: false, value: encoded };
-      },
-      releaseLock() {},
-    };
-    globalThis.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      body: { getReader: () => reader },
-    }) as unknown as typeof fetch;
+  beforeEach(() => {
+    invokeMock.mockReset();
+  });
 
+  it('yields a single chunk backed by complete()', async () => {
+    invokeMock.mockResolvedValue({ text: 'Hello' });
     const c = new DoubaoLlmClient('k');
     const out: string[] = [];
     for await (const chunk of c.stream({ prompt: 'hi' })) {

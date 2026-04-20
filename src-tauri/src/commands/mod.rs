@@ -1,3 +1,4 @@
+pub mod doubao_http;
 pub mod e2e_ws;
 pub mod keychain;
 pub mod meeting_fs;

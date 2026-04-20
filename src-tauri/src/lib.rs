@@ -60,6 +60,8 @@ pub fn run() {
             commands::e2e_ws::e2e_send_audio,
             commands::e2e_ws::e2e_close,
             commands::e2e_ws::e2e_test_credentials,
+            commands::doubao_http::doubao_complete,
+            commands::doubao_http::doubao_test_credentials,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
