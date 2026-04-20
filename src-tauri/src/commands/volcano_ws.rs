@@ -508,3 +508,41 @@ pub async fn asr_test_credentials(
         }),
     }
 }
+
+#[cfg(test)]
+mod ipc_contract_tests {
+    //! Contract tests for the TS ↔ Rust IPC boundary.
+    //!
+    //! Each test takes the exact JSON shape `VolcanoAsrClient` sends to
+    //! `invoke()` and asserts it deserializes into the target Rust struct.
+    //! Catches serde casing drift, missing #[serde(rename_all)], and silent
+    //! field renames — the class of bug that caused
+    //! "asr_start: missing field `enable_speaker_id`" on first real run.
+
+    use super::AsrStartParams;
+
+    #[test]
+    fn asr_start_params_accepts_ts_camelcase_payload() {
+        // Exactly what src/adapters/VolcanoAsrClient.ts sends inside the
+        // `params` field of asr_start's invoke payload:
+        let json = serde_json::json!({
+            "lang": "zh",
+            "enableSpeakerId": true,
+        });
+        let parsed: AsrStartParams = serde_json::from_value(json)
+            .expect("AsrStartParams must accept camelCase (enableSpeakerId) from TS");
+        assert_eq!(parsed.lang, "zh");
+        assert!(parsed.enable_speaker_id);
+    }
+
+    #[test]
+    fn asr_start_params_accepts_en_with_speaker_id_false() {
+        let json = serde_json::json!({
+            "lang": "en",
+            "enableSpeakerId": false,
+        });
+        let parsed: AsrStartParams = serde_json::from_value(json).unwrap();
+        assert_eq!(parsed.lang, "en");
+        assert!(!parsed.enable_speaker_id);
+    }
+}

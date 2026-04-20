@@ -488,3 +488,27 @@ pub async fn e2e_test_credentials(
         }),
     }
 }
+
+#[cfg(test)]
+mod ipc_contract_tests {
+    //! Contract tests for the TS ↔ Rust IPC boundary. See
+    //! `volcano_ws::ipc_contract_tests` for context.
+
+    use super::E2eOpenOpts;
+
+    #[test]
+    fn e2e_open_opts_accepts_ts_snake_case_payload() {
+        // Exactly what src/adapters/DoubaoE2eClient.ts sends inside the
+        // `opts` field. NOTE: this side uses snake_case keys — different
+        // from asr_start's params which uses camelCase. Keep this contract
+        // test so the two sides stay in sync even if one changes.
+        let json = serde_json::json!({
+            "system_prompt": "You are Nono, a meeting assistant.",
+            "voice": "zh_female_vv_jupiter_bigtts",
+        });
+        let parsed: E2eOpenOpts = serde_json::from_value(json)
+            .expect("E2eOpenOpts must accept snake_case (system_prompt) from TS");
+        assert_eq!(parsed.system_prompt, "You are Nono, a meeting assistant.");
+        assert_eq!(parsed.voice, "zh_female_vv_jupiter_bigtts");
+    }
+}
