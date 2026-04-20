@@ -51,6 +51,7 @@ pub fn run() {
             commands::window_controls::window_toggle_maximize,
             commands::prevent_sleep::prevent_sleep_enable,
             commands::prevent_sleep::prevent_sleep_disable,
+            commands::settings_link::open_mic_settings,
             commands::volcano_ws::asr_start,
             commands::volcano_ws::asr_send_audio,
             commands::volcano_ws::asr_stop,
