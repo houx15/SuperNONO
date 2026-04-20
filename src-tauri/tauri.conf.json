@@ -23,7 +23,7 @@
       }
     ],
     "security": {
-      "csp": null
+      "csp": "default-src 'self'; connect-src 'self' wss://openspeech.bytedance.com https://ark.cn-beijing.volces.com; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; worker-src 'self' blob:; media-src 'self' blob:;"
     }
   },
   "bundle": {
