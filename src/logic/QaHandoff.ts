@@ -2,6 +2,7 @@ import type { AsrClient, E2eClient } from './adapters';
 import type { Clock } from './clock';
 import type { TranscriptBuffer } from './TranscriptBuffer';
 import type { AiExchange, OrbState, Summary, Utterance } from './types';
+import type { AudioRouter } from './AudioRouter';
 import { MAX_RAW_WINDOW_MIN_QA, E2E_DEFAULT_VOICE, QA_SYSTEM_PROMPT_PREAMBLE } from './config';
 
 export interface QaHandoffDeps {
@@ -10,6 +11,7 @@ export interface QaHandoffDeps {
   clock: Clock;
   buffer: TranscriptBuffer;
   summaries: () => Summary[];
+  router?: AudioRouter;
   onOrbState: (s: OrbState) => void;
   onExchange: (x: AiExchange) => void;
   onTranscriptBridge?: (u: Utterance) => void;
@@ -23,6 +25,7 @@ export class QaHandoff {
   async trigger(): Promise<void> {
     if (this.active) return;
     this.active = true;
+    this.deps.router?.switchTo('e2e');
     this.deps.onOrbState('activated');
     await this.deps.asr.stop();
 
@@ -68,6 +71,7 @@ export class QaHandoff {
         this.deps.onTranscriptBridge({ t: t + 1, speaker: 'SuperNono', text: answer, final: true });
     }
 
+    this.deps.router?.switchTo('asr');
     await this.deps.asr.start({ lang: 'zh', enableSpeakerId: true });
     this.deps.onOrbState('idle');
     this.active = false;

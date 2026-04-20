@@ -109,6 +109,7 @@ export class MeetingSession {
       clock: this.deps.clock,
       buffer: this.buffer,
       summaries: () => this.summaries,
+      router: this.router,
       onOrbState: (s: OrbState) => this.emit('orbState', s),
       onExchange: (x) => {
         this.aiExchanges.push(x);

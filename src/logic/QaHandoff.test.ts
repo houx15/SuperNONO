@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { QaHandoff } from './QaHandoff';
+import { AudioRouter } from './AudioRouter';
 import { FakeAsrClient } from './__fakes__/FakeAsrClient';
 import { FakeE2eClient } from './__fakes__/FakeE2eClient';
 import { FakeClock } from './__fakes__/FakeClock';
@@ -46,6 +47,34 @@ describe('QaHandoff', () => {
     );
     expect(exchanges.length).toBe(1);
     expect(asrStartSpy).toHaveBeenCalledTimes(2); // initial + resume
+  });
+
+  it('switches router to e2e before opening, back to asr after turn_end', async () => {
+    const asr = new FakeAsrClient();
+    const e2e = new FakeE2eClient();
+    const clock = new FakeClock(10_000);
+    const buf = new TranscriptBuffer();
+    const router = new AudioRouter({ asr: (c) => asr.sendAudio(c), e2e: (c) => e2e.sendAudio(c) });
+    await asr.start({ lang: 'zh', enableSpeakerId: true });
+    const spy = vi.spyOn(router, 'switchTo');
+
+    const qa = new QaHandoff({
+      asr,
+      e2e,
+      clock,
+      buffer: buf,
+      summaries: () => [],
+      router,
+      onOrbState: () => {},
+      onExchange: () => {},
+    });
+
+    const done = qa.trigger();
+    await flush();
+    e2e.scriptTurn({ question: 'q', answer: 'a', audioChunks: [new Uint8Array([1])] });
+    await done;
+
+    expect(spy.mock.calls.map((c) => c[0])).toEqual(['e2e', 'asr']);
   });
 });
 
