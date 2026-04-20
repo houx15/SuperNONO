@@ -1,6 +1,6 @@
-pub mod doubao_http;
 pub mod e2e_ws;
 pub mod keychain;
+pub mod llm_http;
 pub mod meeting_fs;
 pub mod prevent_sleep;
 pub mod settings_link;

@@ -2,18 +2,15 @@ import { useMemo, useState } from 'react';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { Icon } from './Icon';
 import type { TestResult } from '../logic/types';
+import type { LlmConfig } from '../logic/adapters';
+import { LLM_PROVIDERS, type LlmProviderPreset, type LlmSdkShape } from '../logic/config';
+import type { SettingsState } from '../hooks/useSettings';
 
 export interface SettingsModalProps {
-  wakeWord: string;
-  setWakeWord: (w: string) => void;
-  volcanoAppId: string;
-  setVolcanoAppId: (v: string) => void;
-  volcanoAccessKey: string;
-  setVolcanoAccessKey: (v: string) => void;
-  doubaoApiKey: string;
-  setDoubaoApiKey: (v: string) => void;
+  settings: SettingsState;
+  setSettings: (s: SettingsState) => void;
   testVolcano: (appId: string, accessKey: string) => Promise<TestResult>;
-  testDoubao: (apiKey: string) => Promise<TestResult>;
+  testLlm: (cfg: LlmConfig) => Promise<TestResult>;
   onClose: () => void;
   onSave: () => Promise<void>;
 }
@@ -22,7 +19,6 @@ type TestState = 'idle' | 'running' | 'ok' | 'fail';
 
 const VOLCANO_ASR_URL = 'https://console.volcengine.com/speech/service/10038';
 const VOLCANO_E2E_URL = 'https://console.volcengine.com/speech/service/10017';
-const ARK_API_KEY_URL = 'https://console.volcengine.com/ark/region:ark+cn-beijing/apiKey';
 const GUIDE_URL = 'https://github.com/houx15/SuperNONO/blob/main/docs/credentials-guide.md';
 
 const statusStyles: Record<TestState, { label: string; color: string }> = {
@@ -52,40 +48,71 @@ function StatusPill({ state }: { state: TestState }) {
   );
 }
 
+function findPreset(id: string): LlmProviderPreset | undefined {
+  return LLM_PROVIDERS.find((p) => p.id === id);
+}
+
 export function SettingsModal(p: SettingsModalProps) {
+  const { settings, setSettings } = p;
   const [volcanoState, setVolcanoState] = useState<TestState>('idle');
   const [volcanoReason, setVolcanoReason] = useState<string | null>(null);
-  const [doubaoState, setDoubaoState] = useState<TestState>('idle');
-  const [doubaoReason, setDoubaoReason] = useState<string | null>(null);
+  const [llmState, setLlmState] = useState<TestState>('idle');
+  const [llmReason, setLlmReason] = useState<string | null>(null);
 
-  const onVolcanoChange = (setter: (v: string) => void, v: string) => {
-    setter(v);
+  const currentPreset = useMemo(() => findPreset(settings.llmProvider), [settings.llmProvider]);
+
+  const updateSettings = (patch: Partial<SettingsState>) => {
+    setSettings({ ...settings, ...patch });
+  };
+  const onVolcanoChange = (patch: Partial<SettingsState>) => {
+    updateSettings(patch);
     if (volcanoState !== 'idle') {
       setVolcanoState('idle');
       setVolcanoReason(null);
     }
   };
-  const onDoubaoChange = (v: string) => {
-    p.setDoubaoApiKey(v);
-    if (doubaoState !== 'idle') {
-      setDoubaoState('idle');
-      setDoubaoReason(null);
+  const onLlmChange = (patch: Partial<SettingsState>) => {
+    updateSettings(patch);
+    if (llmState !== 'idle') {
+      setLlmState('idle');
+      setLlmReason(null);
     }
+  };
+
+  const onProviderChange = (providerId: string) => {
+    const preset = findPreset(providerId);
+    if (!preset) {
+      updateSettings({ llmProvider: providerId });
+      return;
+    }
+    // When switching preset, reset base URL + sdk shape to the preset's defaults.
+    // Keep model + apiKey so user doesn't lose them on accidental click; they
+    // likely need to change them anyway.
+    onLlmChange({
+      llmProvider: providerId,
+      llmBaseUrl: preset.baseUrl,
+      llmSdkShape: preset.sdkShape,
+    });
   };
 
   const runVolcanoTest = async () => {
     setVolcanoState('running');
     setVolcanoReason(null);
-    const r = await p.testVolcano(p.volcanoAppId, p.volcanoAccessKey);
+    const r = await p.testVolcano(settings.volcanoAppId, settings.volcanoAccessKey);
     setVolcanoState(r.ok ? 'ok' : 'fail');
     setVolcanoReason(r.reason ?? null);
   };
-  const runDoubaoTest = async () => {
-    setDoubaoState('running');
-    setDoubaoReason(null);
-    const r = await p.testDoubao(p.doubaoApiKey);
-    setDoubaoState(r.ok ? 'ok' : 'fail');
-    setDoubaoReason(r.reason ?? null);
+  const runLlmTest = async () => {
+    setLlmState('running');
+    setLlmReason(null);
+    const r = await p.testLlm({
+      baseUrl: settings.llmBaseUrl,
+      model: settings.llmModel,
+      apiKey: settings.llmApiKey,
+      sdkShape: settings.llmSdkShape,
+    });
+    setLlmState(r.ok ? 'ok' : 'fail');
+    setLlmReason(r.reason ?? null);
   };
 
   const openLink = (url: string) => {
@@ -93,16 +120,28 @@ export function SettingsModal(p: SettingsModalProps) {
   };
 
   const hasUnverified = useMemo(() => {
-    const volcanoFilled = p.volcanoAppId.trim() && p.volcanoAccessKey.trim();
-    const doubaoFilled = p.doubaoApiKey.trim();
+    const volcanoFilled = settings.volcanoAppId.trim() && settings.volcanoAccessKey.trim();
+    const llmFilled =
+      settings.llmBaseUrl.trim() && settings.llmModel.trim() && settings.llmApiKey.trim();
     const volcanoBad = volcanoFilled && volcanoState !== 'ok';
-    const doubaoBad = doubaoFilled && doubaoState !== 'ok';
-    return Boolean(volcanoBad || doubaoBad);
-  }, [p.volcanoAppId, p.volcanoAccessKey, p.doubaoApiKey, volcanoState, doubaoState]);
+    const llmBad = llmFilled && llmState !== 'ok';
+    return Boolean(volcanoBad || llmBad);
+  }, [
+    settings.volcanoAppId,
+    settings.volcanoAccessKey,
+    settings.llmBaseUrl,
+    settings.llmModel,
+    settings.llmApiKey,
+    volcanoState,
+    llmState,
+  ]);
+
+  const llmKeyHint = currentPreset?.keyHint ?? 'API Key';
+  const llmModelHint = currentPreset?.modelHint ?? 'model id';
 
   return (
     <div className="modal-scrim" onClick={p.onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
+      <div className="modal modal-lg" onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
           <div>
             <h3>设置 · Settings</h3>
@@ -117,13 +156,14 @@ export function SettingsModal(p: SettingsModalProps) {
             <label>唤醒词 · Wake word</label>
             <input
               className="input"
-              value={p.wakeWord}
-              onChange={(e) => p.setWakeWord(e.target.value)}
+              value={settings.wakeWord}
+              onChange={(e) => updateSettings({ wakeWord: e.target.value })}
               placeholder="例如：嘿 Nono"
             />
             <div className="hint">说出唤醒词后，会议中将触发语音问答。</div>
           </div>
 
+          {/* === Voice section === */}
           <div
             style={{
               marginTop: 16,
@@ -139,7 +179,7 @@ export function SettingsModal(p: SettingsModalProps) {
                 marginBottom: 6,
               }}
             >
-              <div style={{ fontSize: 13, fontWeight: 600 }}>豆包语音凭证</div>
+              <div style={{ fontSize: 13, fontWeight: 600 }}>① 火山语音凭证 (豆包)</div>
               <a
                 href="#"
                 onClick={(e) => {
@@ -155,11 +195,10 @@ export function SettingsModal(p: SettingsModalProps) {
               className="hint"
               style={{ fontFamily: 'var(--sans)', fontSize: 12, lineHeight: 1.55 }}
             >
-              本应用需要在火山引擎开通三个服务。App ID + Access Token 同时用于前两个， Doubao API
-              Key 单独来自 Ark。
+              实时 ASR 与唤醒词问答共用同一组凭证，须在火山引擎语音控制台开通：
               <ul style={{ margin: '6px 0 8px 0', paddingLeft: 18 }}>
                 <li>
-                  豆包·流式语音识别大模型 — 实时 ASR 转写{' '}
+                  豆包·流式语音识别大模型{' '}
                   <a
                     href="#"
                     onClick={(e) => {
@@ -172,7 +211,7 @@ export function SettingsModal(p: SettingsModalProps) {
                   </a>
                 </li>
                 <li>
-                  豆包·端到端实时语音大模型 — 唤醒词问答与 TTS{' '}
+                  豆包·端到端实时语音大模型{' '}
                   <a
                     href="#"
                     onClick={(e) => {
@@ -184,21 +223,7 @@ export function SettingsModal(p: SettingsModalProps) {
                     开通 ↗
                   </a>
                 </li>
-                <li>
-                  豆包·大语言模型 (Ark) — 摘要与会议纪要{' '}
-                  <a
-                    href="#"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      openLink(ARK_API_KEY_URL);
-                    }}
-                    style={{ color: 'var(--accent)' }}
-                  >
-                    创建 API Key ↗
-                  </a>
-                </li>
               </ul>
-              ⚠ Ark API Key 与火山引擎其他产品的通用 API Key 不通用 — 必须在 Ark 控制台单独创建。
             </div>
           </div>
 
@@ -207,8 +232,8 @@ export function SettingsModal(p: SettingsModalProps) {
             <div className="select-row">
               <input
                 className="input mono"
-                value={p.volcanoAppId}
-                onChange={(e) => onVolcanoChange(p.setVolcanoAppId, e.target.value)}
+                value={settings.volcanoAppId}
+                onChange={(e) => onVolcanoChange({ volcanoAppId: e.target.value })}
                 placeholder="123456789"
                 style={{ flex: 1 }}
               />
@@ -222,8 +247,8 @@ export function SettingsModal(p: SettingsModalProps) {
               <input
                 className="input mono"
                 type="password"
-                value={p.volcanoAccessKey}
-                onChange={(e) => onVolcanoChange(p.setVolcanoAccessKey, e.target.value)}
+                value={settings.volcanoAccessKey}
+                onChange={(e) => onVolcanoChange({ volcanoAccessKey: e.target.value })}
                 placeholder="your-access-token"
                 style={{ flex: 1 }}
               />
@@ -232,7 +257,9 @@ export function SettingsModal(p: SettingsModalProps) {
                 style={{ height: 32 }}
                 onClick={runVolcanoTest}
                 disabled={
-                  !p.volcanoAppId.trim() || !p.volcanoAccessKey.trim() || volcanoState === 'running'
+                  !settings.volcanoAppId.trim() ||
+                  !settings.volcanoAccessKey.trim() ||
+                  volcanoState === 'running'
                 }
               >
                 测试
@@ -243,38 +270,121 @@ export function SettingsModal(p: SettingsModalProps) {
                 {volcanoReason}
               </div>
             )}
+            <div className="hint">App ID + Access Token 共同测试。存储于系统钥匙串。</div>
+          </div>
+
+          {/* === LLM section === */}
+          <div
+            style={{
+              marginTop: 18,
+              paddingTop: 16,
+              borderTop: '1px solid var(--border)',
+            }}
+          >
+            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>
+              ② LLM 服务凭证（用于滚动摘要与会议纪要）
+            </div>
+            <div
+              className="hint"
+              style={{ fontFamily: 'var(--sans)', fontSize: 12, lineHeight: 1.55 }}
+            >
+              支持任何 OpenAI-SDK-兼容 或 Anthropic-SDK-兼容 的服务端点 — 选择预设或自行填写 base
+              URL / model / API Key。
+            </div>
+          </div>
+
+          <div className="form-row" style={{ marginTop: 12 }}>
+            <label>服务商 · Provider</label>
+            <div className="select-row">
+              <select
+                className="input"
+                value={settings.llmProvider}
+                onChange={(e) => onProviderChange(e.target.value)}
+                style={{ flex: 1 }}
+              >
+                {LLM_PROVIDERS.map((prov) => (
+                  <option key={prov.id} value={prov.id}>
+                    {prov.label}
+                  </option>
+                ))}
+              </select>
+              <select
+                className="input"
+                value={settings.llmSdkShape}
+                onChange={(e) => onLlmChange({ llmSdkShape: e.target.value as LlmSdkShape })}
+                style={{ width: 150 }}
+                title="SDK 兼容方言"
+              >
+                <option value="openai">OpenAI 兼容</option>
+                <option value="anthropic">Anthropic 兼容</option>
+              </select>
+              {currentPreset?.keyUrl && (
+                <button
+                  className="btn btn-ghost"
+                  style={{ height: 32 }}
+                  onClick={() => openLink(currentPreset.keyUrl!)}
+                >
+                  获取 Key ↗
+                </button>
+              )}
+            </div>
             <div className="hint">
-              App ID + Access Token 一并测试，用于 ASR 与唤醒问答。凭证存储于系统钥匙串。
+              预设会自动填 base URL 与 SDK 方言；选 &ldquo;自定义&rdquo; 可完全手填。
             </div>
           </div>
 
           <div className="form-row">
-            <label>Doubao API Key (Ark)</label>
+            <label>Base URL</label>
+            <input
+              className="input mono"
+              value={settings.llmBaseUrl}
+              onChange={(e) => onLlmChange({ llmBaseUrl: e.target.value })}
+              placeholder="https://api.example.com/v1"
+            />
+          </div>
+
+          <div className="form-row">
+            <label>Model</label>
+            <input
+              className="input mono"
+              value={settings.llmModel}
+              onChange={(e) => onLlmChange({ llmModel: e.target.value })}
+              placeholder={llmModelHint}
+            />
+          </div>
+
+          <div className="form-row">
+            <label>API Key</label>
             <div className="select-row">
               <input
                 className="input mono"
                 type="password"
-                value={p.doubaoApiKey}
-                onChange={(e) => onDoubaoChange(e.target.value)}
-                placeholder="sk-ark-..."
+                value={settings.llmApiKey}
+                onChange={(e) => onLlmChange({ llmApiKey: e.target.value })}
+                placeholder={llmKeyHint}
                 style={{ flex: 1 }}
               />
               <button
                 className="btn btn-ghost"
                 style={{ height: 32 }}
-                onClick={runDoubaoTest}
-                disabled={!p.doubaoApiKey.trim() || doubaoState === 'running'}
+                onClick={runLlmTest}
+                disabled={
+                  !settings.llmBaseUrl.trim() ||
+                  !settings.llmModel.trim() ||
+                  !settings.llmApiKey.trim() ||
+                  llmState === 'running'
+                }
               >
                 测试
               </button>
-              <StatusPill state={doubaoState} />
+              <StatusPill state={llmState} />
             </div>
-            {doubaoState === 'fail' && doubaoReason && (
+            {llmState === 'fail' && llmReason && (
               <div className="hint" style={{ color: 'var(--warning)' }}>
-                {doubaoReason}
+                {llmReason}
               </div>
             )}
-            <div className="hint">用于摘要与纪要生成。凭证存储于系统钥匙串。</div>
+            <div className="hint">凭证存储于系统钥匙串。</div>
           </div>
 
           {hasUnverified && (

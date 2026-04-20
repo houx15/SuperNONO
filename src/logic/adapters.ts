@@ -54,10 +54,17 @@ export interface LlmChunk {
   delta: string;
 }
 
+export interface LlmConfig {
+  baseUrl: string;
+  model: string;
+  apiKey: string;
+  sdkShape: 'openai' | 'anthropic';
+}
+
 export interface LlmClient {
   complete(req: LlmReq): Promise<LlmResp>;
   stream(req: LlmReq): AsyncIterable<LlmChunk>;
-  testCredentials(apiKey: string): Promise<TestResult>;
+  testCredentials(config: LlmConfig): Promise<TestResult>;
 }
 
 export interface Persistence {

@@ -1,4 +1,4 @@
-import type { LlmClient, LlmReq, LlmResp, LlmChunk } from '../adapters';
+import type { LlmClient, LlmConfig, LlmReq, LlmResp, LlmChunk } from '../adapters';
 import type { TestResult } from '../types';
 
 export interface FakeLlmRule {
@@ -20,7 +20,7 @@ export class FakeLlmClient implements LlmClient {
     for (const ch of resp.text) yield { delta: ch };
   }
 
-  async testCredentials(_key: string) {
+  async testCredentials(_cfg: LlmConfig) {
     return this.testResult;
   }
 }

@@ -1,5 +1,11 @@
 import { invoke } from '@tauri-apps/api/core';
-import type { LlmClient, LlmReq, LlmResp, LlmChunk } from '../logic/adapters';
+import type {
+  LlmClient as LlmClientIface,
+  LlmConfig,
+  LlmReq,
+  LlmResp,
+  LlmChunk,
+} from '../logic/adapters';
 import type { TestResult, AsrError } from '../logic/types';
 
 function classifyMessage(msg: string): AsrError['kind'] {
@@ -14,15 +20,21 @@ function retryableKind(k: AsrError['kind']): boolean {
   return k === 'rate_limit' || k === 'server' || k === 'network';
 }
 
-export class DoubaoLlmClient implements LlmClient {
-  constructor(private apiKey: string | null) {}
+export class LlmClient implements LlmClientIface {
+  constructor(private config: LlmConfig | null) {}
 
   async complete(req: LlmReq): Promise<LlmResp> {
-    if (!this.apiKey) throw new Error('Doubao API key not configured');
+    const cfg = this.config;
+    if (!cfg || !cfg.apiKey || !cfg.baseUrl || !cfg.model) {
+      throw new Error('LLM not configured');
+    }
     try {
-      const resp = await invoke<{ text: string }>('doubao_complete', {
-        apiKey: this.apiKey,
+      const resp = await invoke<{ text: string }>('llm_complete', {
+        baseUrl: cfg.baseUrl,
+        model: cfg.model,
+        apiKey: cfg.apiKey,
         prompt: req.prompt,
+        sdkShape: cfg.sdkShape,
       });
       return { text: resp.text };
     } catch (e) {
@@ -34,13 +46,18 @@ export class DoubaoLlmClient implements LlmClient {
   }
 
   async *stream(req: LlmReq): AsyncIterable<LlmChunk> {
-    // Streaming SSE is not routed through Rust in M2 — summaries/minutes use
-    // `complete()`. Keep the contract satisfied by yielding a single chunk.
+    // Streaming SSE not routed through Rust yet; yield a single chunk backed
+    // by `complete()`. Summaries + minutes in M2 only use `complete`.
     const resp = await this.complete(req);
     yield { delta: resp.text };
   }
 
-  async testCredentials(apiKey: string): Promise<TestResult> {
-    return await invoke<TestResult>('doubao_test_credentials', { apiKey });
+  async testCredentials(config: LlmConfig): Promise<TestResult> {
+    return await invoke<TestResult>('llm_test_credentials', {
+      baseUrl: config.baseUrl,
+      model: config.model,
+      apiKey: config.apiKey,
+      sdkShape: config.sdkShape,
+    });
   }
 }

@@ -10,13 +10,20 @@ Open the app in a meeting room, press **Start Meeting**, and it continuously tra
 
 ## Services used
 
-The app calls three Volcano Engine products. You need to enable each one in your Volcano account and obtain the corresponding credentials.
+Two credential categories:
+
+### ① Voice (fixed: Volcano Engine)
 
 | Service | What it does here | Endpoint | Resource ID |
 |---|---|---|---|
-| 豆包·流式语音识别大模型 (Doubao Streaming ASR) | Real-time transcription of the meeting | `wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async` | `volc.bigasr.sauc.duration` |
-| 豆包·端到端实时语音大模型 (Doubao E2E Realtime) | Wake-word Q&A: listens to the user's question after "嘿 Nono", answers aloud via TTS | `wss://openspeech.bytedance.com/api/v3/realtime/dialogue` | `volc.speech.dialog` |
-| 豆包·大语言模型 (Doubao via Ark) | Rolling topic summaries every ~5 min + final meeting minutes on end | `https://ark.cn-beijing.volces.com/api/v3/chat/completions` | Model `doubao-1-5-pro-256k` |
+| 豆包·流式语音识别大模型 | Real-time transcription | `wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async` | `volc.bigasr.sauc.duration` |
+| 豆包·端到端实时语音大模型 | Wake-word Q&A + TTS | `wss://openspeech.bytedance.com/api/v3/realtime/dialogue` | `volc.speech.dialog` |
+
+Both WebSocket services share one **App ID + Access Token** issued by the Volcano speech console.
+
+### ② LLM (pluggable)
+
+Rolling summaries and final meeting minutes go through **any LLM service you pick** — Settings has a dropdown with presets for Doubao (Ark), OpenAI, Anthropic, Kimi (Moonshot), Aliyun DashScope, Zhipu GLM, DeepSeek, plus a Custom option for your own endpoint. All OpenAI-SDK-compatible providers work with the same code; Anthropic is handled with its Messages API shape. You supply base URL + model + API key per service.
 
 ### Where to open services and get credentials
 
@@ -25,11 +32,11 @@ Full click-by-click walkthrough: **[docs/credentials-guide.md](docs/credentials-
 | You need | Exact page |
 |---|---|
 | App ID + Access Token (cover both WSS services) | <https://console.volcengine.com/speech/service/10038> (流式语音识别) and <https://console.volcengine.com/speech/service/10017> (端到端) |
-| Doubao API Key (Ark) | <https://console.volcengine.com/ark/region:ark+cn-beijing/apiKey> |
+| LLM API Key + model ID | Depends on provider — Settings modal has a "获取 Key ↗" button that opens the right console for each preset |
 
-⚠ **The Ark API key is different from your general Volcano Engine API Key.** It must be created inside the Ark console specifically; otherwise Doubao will return `HTTP 401: The API key doesn't exist`.
+⚠ **If you pick Doubao, its Ark API Key is different from your general Volcano Engine API Key.** It must be created inside the Ark console (<https://console.volcengine.com/ark/region:ark+cn-beijing/apiKey>); otherwise you'll see `HTTP 401: The API key doesn't exist`.
 
-Enter all three in **Settings → 豆包语音凭证**; the test buttons verify each live handshake before you start a meeting. Credentials are stored in the OS keychain (macOS Keychain, Windows Credential Manager).
+Enter everything in **Settings → 设置**; the test buttons verify each live handshake before you start a meeting. Credentials are stored in the OS keychain (macOS Keychain, Windows Credential Manager).
 
 ## Data & privacy
 
@@ -69,12 +76,18 @@ Press `Ctrl+Alt+D` inside the app to toggle the dev panel. "Replay Q2 strategy" 
 Useful during development (no GUI needed):
 
 ```sh
-# 1. Put APP_ID, ACCESS_TOKEN, VOLCANO_ENGINE_API_KEY in config/secrets (gitignored)
-# 2. Run the smoke binary; it hits all three real endpoints
+# config/secrets (gitignored):
+#   APP_ID=...
+#   ACCESS_TOKEN=...
+#   LLM_API_KEY=...
+#   LLM_BASE_URL=https://ark.cn-beijing.volces.com/api/v3   # optional, Doubao default
+#   LLM_MODEL=doubao-seed-2-0-code-preview-260215           # optional
+#   LLM_SDK_SHAPE=openai                                    # optional, or "anthropic"
+
 cd src-tauri && cargo run --example smoke_credentials
 ```
 
-Each service reports pass/fail with the server `logid` so you can forward it to Volcano support if a credential is misbehaving.
+Each service reports pass/fail with the server `logid` so you can forward it to support if a credential is misbehaving.
 
 ## Spec + design
 

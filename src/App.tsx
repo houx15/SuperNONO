@@ -22,7 +22,7 @@ import { useHistory } from './hooks/useHistory';
 import { useMeetingSession } from './hooks/useMeetingSession';
 import { VolcanoAsrClient } from './adapters/VolcanoAsrClient';
 import { DoubaoE2eClient } from './adapters/DoubaoE2eClient';
-import { DoubaoLlmClient } from './adapters/DoubaoLlmClient';
+import { LlmClient } from './adapters/LlmClient';
 import { FixtureAsrClient } from './adapters/FixtureAsrClient';
 import { fsAdapter } from './adapters/FsAdapter';
 import { DevTweaks } from './ui/DevTweaks';
@@ -118,8 +118,18 @@ export default function App() {
     [sessionId, settings.volcanoAppId, settings.volcanoAccessKey],
   );
   const realLlm = useMemo(
-    () => new DoubaoLlmClient(settings.doubaoApiKey),
-    [settings.doubaoApiKey],
+    () =>
+      new LlmClient(
+        settings.llmApiKey && settings.llmBaseUrl && settings.llmModel
+          ? {
+              baseUrl: settings.llmBaseUrl,
+              model: settings.llmModel,
+              apiKey: settings.llmApiKey,
+              sdkShape: settings.llmSdkShape,
+            }
+          : null,
+      ),
+    [settings.llmApiKey, settings.llmBaseUrl, settings.llmModel, settings.llmSdkShape],
   );
 
   const asr = fixtureMode?.asr ?? realAsr;
@@ -348,16 +358,10 @@ export default function App() {
 
       {settingsOpen && (
         <SettingsModal
-          wakeWord={settings.wakeWord}
-          setWakeWord={(v) => setSettings({ ...settings, wakeWord: v })}
-          volcanoAppId={settings.volcanoAppId}
-          setVolcanoAppId={(v) => setSettings({ ...settings, volcanoAppId: v })}
-          volcanoAccessKey={settings.volcanoAccessKey}
-          setVolcanoAccessKey={(v) => setSettings({ ...settings, volcanoAccessKey: v })}
-          doubaoApiKey={settings.doubaoApiKey}
-          setDoubaoApiKey={(v) => setSettings({ ...settings, doubaoApiKey: v })}
+          settings={settings}
+          setSettings={setSettings}
           testVolcano={(id, key) => asr.testCredentials(id, key)}
-          testDoubao={(key) => llm.testCredentials(key)}
+          testLlm={(cfg) => llm.testCredentials(cfg)}
           onClose={() => setSettingsOpen(false)}
           onSave={saveSettings}
         />

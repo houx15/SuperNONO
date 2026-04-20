@@ -1,8 +1,15 @@
-//! Credential smoke test against real Volcano + Doubao endpoints.
+//! Credential smoke test against real Volcano + LLM provider endpoints.
 //!
-//! Reads ../config/secrets (gitignored) for APP_ID / ACCESS_TOKEN /
-//! VOLCANO_ENGINE_API_KEY (Doubao Ark key), then hits each of:
-//!   1. Ark chat completions (Doubao LLM)
+//! Reads ../config/secrets (gitignored). Required keys:
+//!   APP_ID, ACCESS_TOKEN                           — Volcano voice services
+//!   LLM_API_KEY                                    — any provider
+//! Optional LLM tuning (defaults match Doubao/Ark):
+//!   LLM_BASE_URL   (default https://ark.cn-beijing.volces.com/api/v3)
+//!   LLM_MODEL      (default doubao-seed-2-0-code-preview-260215)
+//!   LLM_SDK_SHAPE  (openai | anthropic; default openai)
+//!
+//! Hits:
+//!   1. LLM /chat/completions (OpenAI shape) or /messages (Anthropic shape)
 //!   2. bigmodel_async ASR WS handshake + first full_client_request frame
 //!   3. realtime/dialogue E2E WS handshake + StartConnection + StartSession
 //!
@@ -96,38 +103,78 @@ fn encode_start_session(session_id: &str, system_prompt: &str, voice: &str) -> V
     encode_e2e_event(0b0001, 0b0001, 100, Some(session_id), body.as_bytes())
 }
 
-async fn smoke_doubao(api_key: &str) -> Result<String, String> {
+async fn smoke_llm(
+    base_url: &str,
+    model: &str,
+    api_key: &str,
+    sdk_shape: &str,
+) -> Result<String, String> {
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(15))
         .build()
         .unwrap();
-    let body = serde_json::json!({
-        "model": "doubao-1-5-pro-256k",
-        "messages": [{"role": "user", "content": "Say hi in 3 words."}],
-        "stream": false,
-        "max_tokens": 20,
-    });
-    let resp = client
-        .post("https://ark.cn-beijing.volces.com/api/v3/chat/completions")
-        .bearer_auth(api_key)
-        .json(&body)
-        .send()
-        .await
-        .map_err(|e| format!("network: {e}"))?;
+    let base = base_url.trim_end_matches('/');
+    let (url, body, resp_parser): (String, serde_json::Value, fn(&serde_json::Value) -> String) =
+        match sdk_shape {
+            "openai" => (
+                format!("{base}/chat/completions"),
+                serde_json::json!({
+                    "model": model,
+                    "messages": [{"role": "user", "content": "Say hi in 3 words."}],
+                    "stream": false,
+                    "max_tokens": 20,
+                }),
+                |v| {
+                    v["choices"][0]["message"]["content"]
+                        .as_str()
+                        .unwrap_or("")
+                        .to_string()
+                },
+            ),
+            "anthropic" => (
+                format!("{base}/messages"),
+                serde_json::json!({
+                    "model": model,
+                    "messages": [{"role": "user", "content": "Say hi in 3 words."}],
+                    "max_tokens": 20,
+                }),
+                |v| {
+                    let parts = v["content"].as_array().cloned().unwrap_or_default();
+                    let mut s = String::new();
+                    for p in parts {
+                        if p["type"].as_str() == Some("text") {
+                            if let Some(t) = p["text"].as_str() {
+                                s.push_str(t);
+                            }
+                        }
+                    }
+                    s
+                },
+            ),
+            other => return Err(format!("unsupported sdk_shape: {other}")),
+        };
+
+    let mut req = client.post(&url).json(&body);
+    req = match sdk_shape {
+        "openai" => req.bearer_auth(api_key),
+        "anthropic" => req
+            .header("x-api-key", api_key)
+            .header("anthropic-version", "2023-06-01")
+            .header("content-type", "application/json"),
+        _ => req,
+    };
+
+    let resp = req.send().await.map_err(|e| format!("network: {e}"))?;
     let status = resp.status();
     let text = resp.text().await.unwrap_or_default();
     if !status.is_success() {
         return Err(format!(
             "HTTP {status}: {}",
-            text.chars().take(200).collect::<String>()
+            text.chars().take(240).collect::<String>()
         ));
     }
     let v: serde_json::Value = serde_json::from_str(&text).map_err(|e| format!("parse: {e}"))?;
-    let content = v["choices"][0]["message"]["content"]
-        .as_str()
-        .unwrap_or("")
-        .to_string();
-    Ok(content)
+    Ok(resp_parser(&v))
 }
 
 async fn smoke_asr(app_id: &str, access_token: &str) -> Result<String, String> {
@@ -325,20 +372,32 @@ async fn main() {
     let secrets = load_secrets();
     let app_id = secrets.get("APP_ID").cloned().expect("APP_ID");
     let access_token = secrets.get("ACCESS_TOKEN").cloned().expect("ACCESS_TOKEN");
-    let doubao_key = secrets
-        .get("VOLCANO_ENGINE_API_KEY")
+    let llm_key = secrets.get("LLM_API_KEY").cloned().expect("LLM_API_KEY");
+    let llm_base_url = secrets
+        .get("LLM_BASE_URL")
         .cloned()
-        .expect("VOLCANO_ENGINE_API_KEY (Ark key)");
+        .unwrap_or_else(|| "https://ark.cn-beijing.volces.com/api/v3".into());
+    let llm_model = secrets
+        .get("LLM_MODEL")
+        .cloned()
+        .unwrap_or_else(|| "doubao-seed-2-0-code-preview-260215".into());
+    let llm_sdk_shape = secrets
+        .get("LLM_SDK_SHAPE")
+        .cloned()
+        .unwrap_or_else(|| "openai".into());
 
     println!(
-        "APP_ID={app_id}  ACCESS_TOKEN={}  ARK_KEY={}",
+        "APP_ID={app_id}  ACCESS_TOKEN={}  LLM={}/{} ({}) KEY={}",
         redact(&access_token),
-        redact(&doubao_key)
+        llm_base_url,
+        llm_model,
+        llm_sdk_shape,
+        redact(&llm_key),
     );
 
-    println!("\n=== 1. Doubao LLM (Ark /chat/completions) ===");
+    println!("\n=== 1. LLM ({llm_sdk_shape} shape) ===");
     let t = Instant::now();
-    match smoke_doubao(&doubao_key).await {
+    match smoke_llm(&llm_base_url, &llm_model, &llm_key, &llm_sdk_shape).await {
         Ok(content) => println!(
             "✓ PASS ({:.1}s)  reply: {content:?}",
             t.elapsed().as_secs_f32()
