@@ -108,8 +108,14 @@ export default function App() {
     llm: FakeLlmClient;
   } | null>(null);
 
-  const realAsr = useMemo(() => new VolcanoAsrClient(sessionId), [sessionId]);
-  const realE2e = useMemo(() => new DoubaoE2eClient(sessionId), [sessionId]);
+  const realAsr = useMemo(
+    () => new VolcanoAsrClient(sessionId, settings.volcanoAppId, settings.volcanoAccessKey),
+    [sessionId, settings.volcanoAppId, settings.volcanoAccessKey],
+  );
+  const realE2e = useMemo(
+    () => new DoubaoE2eClient(sessionId, settings.volcanoAppId, settings.volcanoAccessKey),
+    [sessionId, settings.volcanoAppId, settings.volcanoAccessKey],
+  );
   const realLlm = useMemo(
     () => new DoubaoLlmClient(settings.doubaoApiKey),
     [settings.doubaoApiKey],
