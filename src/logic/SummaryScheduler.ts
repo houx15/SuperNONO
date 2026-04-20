@@ -7,6 +7,7 @@ import {
   MAX_RAW_WINDOW_MIN_SUMMARY,
   MAX_CONTEXT_CHARS,
 } from './config';
+import { activePrompts } from './prompts';
 
 export interface LlmMinimal {
   complete(req: { prompt: string }): Promise<{ text: string }>;
@@ -83,16 +84,7 @@ export class SummaryScheduler {
 }
 
 function buildSummaryPrompt(prev: Summary | null, recent: string): string {
-  return [
-    'You are summarising an ongoing meeting segment.',
-    'Given the PREVIOUS segment summary and the NEW transcript, return JSON:',
-    '{"topic": "...", "text": "2-4 sentences", "sameTopic": bool}',
-    'If the topic is unchanged, set sameTopic=true; the caller may merge.',
-    '---PREVIOUS---',
-    prev ? prev.topic + '\n' + prev.text : '(none)',
-    '---NEW TRANSCRIPT---',
-    recent,
-  ].join('\n');
+  return activePrompts().buildSummaryPrompt(prev, recent);
 }
 
 function formatRange(startMs: number, endMs: number): string {

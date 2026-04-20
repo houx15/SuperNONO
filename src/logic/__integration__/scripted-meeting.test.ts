@@ -18,11 +18,13 @@ describe('integration: scripted 15-min meeting', () => {
     const e2e = new FakeE2eClient();
     const llm = new FakeLlmClient([
       {
-        match: (p) => p.includes('summarising'),
+        // Matches the Chinese summary prompt; `新增对话` is unique to it.
+        match: (p) => p.includes('新增对话'),
         text: JSON.stringify({ topic: 'Topic', text: 'Summary sentence.', sameTopic: false }),
       },
       {
-        match: (p) => p.includes('extracting'),
+        // Matches the Chinese minutes-extraction prompt.
+        match: (p) => p.includes('抽取'),
         text: JSON.stringify({
           decisions: ['D1'],
           actions: [{ owner: 'S1', task: 'Do X', tag: 'Ops' }],

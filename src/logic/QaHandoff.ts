@@ -3,7 +3,8 @@ import type { Clock } from './clock';
 import type { TranscriptBuffer } from './TranscriptBuffer';
 import type { AiExchange, OrbState, Summary, Utterance } from './types';
 import type { AudioRouter } from './AudioRouter';
-import { MAX_RAW_WINDOW_MIN_QA, E2E_DEFAULT_VOICE, QA_SYSTEM_PROMPT_PREAMBLE } from './config';
+import { MAX_RAW_WINDOW_MIN_QA, E2E_DEFAULT_VOICE } from './config';
+import { activePrompts } from './prompts';
 
 export interface QaHandoffDeps {
   asr: AsrClient;
@@ -87,7 +88,7 @@ export class QaHandoff {
       .map((u) => `[${u.speaker}] ${u.text}`)
       .join('\n');
     return [
-      QA_SYSTEM_PROMPT_PREAMBLE,
+      activePrompts().qaSystemPreamble,
       '---SUMMARIES---',
       summariesText,
       '---RECENT---',

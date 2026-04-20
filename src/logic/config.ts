@@ -111,7 +111,5 @@ export const DEFAULT_LLM_PROVIDER = 'doubao';
 
 export const E2E_DEFAULT_VOICE = 'zh_female_vv_jupiter_bigtts';
 
-export const QA_SYSTEM_PROMPT_PREAMBLE =
-  'You are SuperNono, an AI participant in a live meeting. ' +
-  'Answer concisely, in the same language as the question, ' +
-  'based only on the discussion context below.';
+// QA system preamble now lives in src/logic/prompts.ts (activePrompts().qaSystemPreamble)
+// so all LLM-facing strings switch language together.

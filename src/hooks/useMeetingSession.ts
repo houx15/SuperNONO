@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { MeetingSession } from '../logic/MeetingSession';
 import { RealClock } from '../logic/clock';
+import { AnswerAudioPlayer } from '../audio/AnswerAudioPlayer';
 import type { AiExchange, OrbState, Summary, Utterance } from '../logic/types';
 import type {
   AsrClient,
@@ -22,6 +23,8 @@ export interface UseMeetingSessionDeps {
 
 export function useMeetingSession(deps: UseMeetingSessionDeps) {
   const sessionRef = useRef<MeetingSession | null>(null);
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const audioPlayerRef = useRef<AnswerAudioPlayer | null>(null);
   const [summaries, setSummaries] = useState<Summary[]>([]);
   const [activeSummary] = useState<Summary | null>(null);
   const [currentExchange, setCurrentExchange] = useState<AiExchange | null>(null);
@@ -41,6 +44,18 @@ export function useMeetingSession(deps: UseMeetingSessionDeps) {
 
   const start = useCallback(
     async (title: string) => {
+      // The AudioContext must be created inside a user gesture (Start
+      // Meeting click); constructing it earlier can leave it suspended on
+      // macOS WKWebView and the TTS playback will be silent. Keep one per
+      // meeting and close it on stop.
+      if (!audioCtxRef.current) {
+        audioCtxRef.current = new AudioContext();
+      }
+      if (audioCtxRef.current.state === 'suspended') {
+        await audioCtxRef.current.resume().catch(() => {});
+      }
+      audioPlayerRef.current = new AnswerAudioPlayer(audioCtxRef.current);
+
       const session = new MeetingSession({
         asr: deps.asr,
         e2e: deps.e2e,
@@ -49,6 +64,7 @@ export function useMeetingSession(deps: UseMeetingSessionDeps) {
         mic: deps.mic,
         clock: new RealClock(),
         config: { wakeWord: deps.wakeWord, lang: deps.lang },
+        audioPlayer: audioPlayerRef.current,
       });
       sessionRef.current = session;
 
@@ -93,6 +109,12 @@ export function useMeetingSession(deps: UseMeetingSessionDeps) {
 
   const stop = useCallback(async () => {
     await sessionRef.current?.stop();
+    audioPlayerRef.current?.stop();
+    audioPlayerRef.current = null;
+    if (audioCtxRef.current && audioCtxRef.current.state !== 'closed') {
+      await audioCtxRef.current.close().catch(() => {});
+    }
+    audioCtxRef.current = null;
     setStatus('ended');
     setAmplitude(null);
   }, []);
