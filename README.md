@@ -20,10 +20,14 @@ The app calls three Volcano Engine products. You need to enable each one in your
 
 ### Where to open services and get credentials
 
-- **Volcano speech console** — https://console.volcengine.com/speech
-  Enable *豆包流式语音识别大模型* and *豆包端到端实时语音大模型*. On that page, find your **App ID** and **Access Token** — these two together cover both WS services.
-- **Volcano Ark console** — https://console.volcengine.com/ark
-  Enable *Doubao LLM* and create an **API Key** (starts with `sk-`). This one is separate from the speech credentials.
+Full click-by-click walkthrough: **[docs/credentials-guide.md](docs/credentials-guide.md)** (Chinese). Summary:
+
+| You need | Exact page |
+|---|---|
+| App ID + Access Token (cover both WSS services) | <https://console.volcengine.com/speech/service/10038> (流式语音识别) and <https://console.volcengine.com/speech/service/10017> (端到端) |
+| Doubao API Key (Ark) | <https://console.volcengine.com/ark/region:ark+cn-beijing/apiKey> |
+
+⚠ **The Ark API key is different from your general Volcano Engine API Key.** It must be created inside the Ark console specifically; otherwise Doubao will return `HTTP 401: The API key doesn't exist`.
 
 Enter all three in **Settings → 豆包语音凭证**; the test buttons verify each live handshake before you start a meeting. Credentials are stored in the OS keychain (macOS Keychain, Windows Credential Manager).
 
@@ -59,6 +63,18 @@ cd src-tauri && cargo test --features ws-integration
 ## Dev tweaks
 
 Press `Ctrl+Alt+D` inside the app to toggle the dev panel. "Replay Q2 strategy" drives a fixture-scripted meeting end-to-end without real credentials (summaries won't appear in the 10-second demo because `SummaryScheduler` uses the real 5-minute clock — known limitation).
+
+### Verify credentials from the command line
+
+Useful during development (no GUI needed):
+
+```sh
+# 1. Put APP_ID, ACCESS_TOKEN, VOLCANO_ENGINE_API_KEY in config/secrets (gitignored)
+# 2. Run the smoke binary; it hits all three real endpoints
+cd src-tauri && cargo run --example smoke_credentials
+```
+
+Each service reports pass/fail with the server `logid` so you can forward it to Volcano support if a credential is misbehaving.
 
 ## Spec + design
 

@@ -20,8 +20,10 @@ export interface SettingsModalProps {
 
 type TestState = 'idle' | 'running' | 'ok' | 'fail';
 
-const VOLCANO_CONSOLE_URL = 'https://console.volcengine.com/speech/app';
-const ARK_CONSOLE_URL = 'https://console.volcengine.com/ark';
+const VOLCANO_ASR_URL = 'https://console.volcengine.com/speech/service/10038';
+const VOLCANO_E2E_URL = 'https://console.volcengine.com/speech/service/10017';
+const ARK_API_KEY_URL = 'https://console.volcengine.com/ark/region:ark+cn-beijing/apiKey';
+const GUIDE_URL = 'https://github.com/houx15/SuperNONO/blob/main/docs/credentials-guide.md';
 
 const statusStyles: Record<TestState, { label: string; color: string }> = {
   idle: { label: '未测试', color: 'var(--fg-dim)' },
@@ -129,40 +131,74 @@ export function SettingsModal(p: SettingsModalProps) {
               borderTop: '1px solid var(--border)',
             }}
           >
-            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>豆包语音凭证</div>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'baseline',
+                justifyContent: 'space-between',
+                marginBottom: 6,
+              }}
+            >
+              <div style={{ fontSize: 13, fontWeight: 600 }}>豆包语音凭证</div>
+              <a
+                href="#"
+                onClick={(e) => {
+                  e.preventDefault();
+                  openLink(GUIDE_URL);
+                }}
+                style={{ color: 'var(--accent)', fontSize: 11 }}
+              >
+                详细获取指南 ↗
+              </a>
+            </div>
             <div
               className="hint"
               style={{ fontFamily: 'var(--sans)', fontSize: 12, lineHeight: 1.55 }}
             >
-              本应用需要在火山引擎（Volcano Engine）开通以下服务：
+              本应用需要在火山引擎开通三个服务。App ID + Access Token 同时用于前两个， Doubao API
+              Key 单独来自 Ark。
               <ul style={{ margin: '6px 0 8px 0', paddingLeft: 18 }}>
-                <li>豆包·流式语音识别大模型 — 实时 ASR 转写</li>
-                <li>豆包·端到端实时语音大模型 — 唤醒词问答与 TTS</li>
-                <li>豆包·大语言模型 (Ark) — 滚动摘要与会议纪要</li>
+                <li>
+                  豆包·流式语音识别大模型 — 实时 ASR 转写{' '}
+                  <a
+                    href="#"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      openLink(VOLCANO_ASR_URL);
+                    }}
+                    style={{ color: 'var(--accent)' }}
+                  >
+                    开通 ↗
+                  </a>
+                </li>
+                <li>
+                  豆包·端到端实时语音大模型 — 唤醒词问答与 TTS{' '}
+                  <a
+                    href="#"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      openLink(VOLCANO_E2E_URL);
+                    }}
+                    style={{ color: 'var(--accent)' }}
+                  >
+                    开通 ↗
+                  </a>
+                </li>
+                <li>
+                  豆包·大语言模型 (Ark) — 摘要与会议纪要{' '}
+                  <a
+                    href="#"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      openLink(ARK_API_KEY_URL);
+                    }}
+                    style={{ color: 'var(--accent)' }}
+                  >
+                    创建 API Key ↗
+                  </a>
+                </li>
               </ul>
-              开通后请在{' '}
-              <a
-                href="#"
-                onClick={(e) => {
-                  e.preventDefault();
-                  openLink(VOLCANO_CONSOLE_URL);
-                }}
-                style={{ color: 'var(--accent)', textDecoration: 'underline' }}
-              >
-                火山引擎语音控制台 ↗
-              </a>{' '}
-              获取 App ID 与 Access Token；在{' '}
-              <a
-                href="#"
-                onClick={(e) => {
-                  e.preventDefault();
-                  openLink(ARK_CONSOLE_URL);
-                }}
-                style={{ color: 'var(--accent)', textDecoration: 'underline' }}
-              >
-                火山 Ark 控制台 ↗
-              </a>{' '}
-              获取 Doubao API Key。
+              ⚠ Ark API Key 与火山引擎其他产品的通用 API Key 不通用 — 必须在 Ark 控制台单独创建。
             </div>
           </div>
 
