@@ -288,6 +288,8 @@ export default function App() {
         onToggleTheme={toggle}
         onOpenSettings={() => setSettingsOpen(true)}
         isMeetingActive={view === 'meeting'}
+        // TODO: wire from useMeetingSession status after Phase 11
+        status="idle"
       />
       <div
         className="sidebar-resize-handle"

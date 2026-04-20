@@ -11,6 +11,8 @@ export interface SidebarProps {
   onToggleTheme: () => void;
   onOpenSettings: () => void;
   isMeetingActive: boolean;
+  status: 'idle' | 'listening' | 'reconnecting' | 'paused' | 'ended';
+  onResumeClick?: () => void;
 }
 
 export function Sidebar(props: SidebarProps) {
@@ -24,6 +26,8 @@ export function Sidebar(props: SidebarProps) {
     onToggleTheme,
     onOpenSettings,
     isMeetingActive,
+    status,
+    onResumeClick,
   } = props;
 
   return (
@@ -55,6 +59,13 @@ export function Sidebar(props: SidebarProps) {
             </>
           )}
         </button>
+        {status === 'listening' && <span className="pill pill-green">● Recording</span>}
+        {status === 'reconnecting' && <span className="pill pill-yellow">↻ Reconnecting…</span>}
+        {status === 'paused' && (
+          <button className="pill pill-red" onClick={onResumeClick}>
+            ⏸ Paused — retry
+          </button>
+        )}
       </div>
       <div className="sidebar-section-label">
         <span>History</span>

@@ -1448,3 +1448,11 @@ textarea {
    -------------------------------------------------------------- */
 .orb { --amplitude: 0; }
 .orb.orb-listening { transform: scale(calc(1 + var(--amplitude) * 0.08)); }
+
+/* --------------------------------------------------------------
+   Sidebar status pills (Task 23)
+   -------------------------------------------------------------- */
+.pill { padding: 2px 8px; border-radius: 10px; font-size: 11px; }
+.pill-green { background: #16a34a; color: white; }
+.pill-yellow { background: #eab308; color: white; }
+.pill-red { background: #dc2626; color: white; border: none; cursor: pointer; }
