@@ -103,7 +103,9 @@ pub mod frame {
     #[derive(Debug)]
     pub enum ServerFrame {
         Response {
+            #[allow(dead_code)]
             sequence: i32,
+            #[allow(dead_code)]
             text: String,
             utterances: Vec<Utterance>,
         },
@@ -135,6 +137,7 @@ pub mod frame {
         out
     }
 
+    #[allow(dead_code)]
     pub fn encode_audio_only_last(pcm: &[u8]) -> Vec<u8> {
         let mut out = Vec::with_capacity(8 + pcm.len());
         out.push(0x11);

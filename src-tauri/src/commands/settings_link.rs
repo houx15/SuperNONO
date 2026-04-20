@@ -7,7 +7,7 @@ pub async fn open_mic_settings() -> Result<(), String> {
             .arg(url)
             .status()
             .map_err(|e| e.to_string())?;
-        return Ok(());
+        Ok(())
     }
     #[cfg(target_os = "windows")]
     {
@@ -15,7 +15,7 @@ pub async fn open_mic_settings() -> Result<(), String> {
             .args(["/c", "start", "ms-settings:privacy-microphone"])
             .status()
             .map_err(|e| e.to_string())?;
-        return Ok(());
+        Ok(())
     }
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     {

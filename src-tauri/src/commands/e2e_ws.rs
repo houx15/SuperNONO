@@ -71,6 +71,7 @@ pub mod frame {
         write_event_frame(0b0001, 0b0001, 102, Some(session_id), b"{}")
     }
 
+    #[allow(dead_code)]
     pub fn encode_finish_connection() -> Vec<u8> {
         write_event_frame(0b0001, 0b0001, 2, None, b"{}")
     }
