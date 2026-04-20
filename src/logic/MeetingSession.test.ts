@@ -45,7 +45,7 @@ describe('MeetingSession', () => {
     const transcripts: unknown[] = [];
     session.on('transcript', (u) => transcripts.push(u));
     await session.start('Test meeting');
-    asr.emitFinal(1, 'S1', 'hello world');
+    asr.scriptFinal({ t: 1, speaker: 'S1', text: 'hello world', final: true });
     await flush();
     expect(transcripts.length).toBe(1);
     const full = await persistence.readMeeting(session.id!);
@@ -57,7 +57,7 @@ describe('MeetingSession', () => {
     const summaries: Summary[] = [];
     session.on('summary', (s) => summaries.push(s as Summary));
     await session.start('Meeting');
-    asr.emitFinal(1, 'S1', 'lots of content to summarise');
+    asr.scriptFinal({ t: 1, speaker: 'S1', text: 'lots of content to summarise', final: true });
     clock.advance(SUMMARY_INTERVAL_MS);
     await flush();
     expect(summaries.length).toBe(1);
@@ -68,7 +68,7 @@ describe('MeetingSession', () => {
     const orbStates: string[] = [];
     session.on('orbState', (s) => orbStates.push(s as string));
     await session.start('Meeting');
-    asr.emitFinal(1, 'S1', '嘿 Nono, 查价格');
+    asr.scriptFinal({ t: 1, speaker: 'S1', text: '嘿 Nono, 查价格', final: true });
     // Flush so MeetingSession routes utterance to wake-word matcher and triggers QaHandoff,
     // which asynchronously opens E2E. Then script the E2E turn.
     await flush();
@@ -80,7 +80,7 @@ describe('MeetingSession', () => {
   it('on stop, generates minutes and marks ended_at', async () => {
     const { session, asr, persistence } = makeSession();
     await session.start('Meeting');
-    asr.emitFinal(1, 'S1', 'hello');
+    asr.scriptFinal({ t: 1, speaker: 'S1', text: 'hello', final: true });
     await flush();
     await session.stop();
     const full = await persistence.readMeeting(session.id!);

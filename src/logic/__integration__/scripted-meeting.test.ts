@@ -50,13 +50,23 @@ describe('integration: scripted 15-min meeting', () => {
     // Scripted chatter: 30 utterances spaced 20s apart spans 10 minutes of clock.
     // That's 2 full summary intervals → at least 2 summary cards.
     for (let i = 0; i < 30; i++) {
-      asr.emitFinal(clock.now(), `Speaker ${(i % 3) + 1}`, `Utterance number ${i}.`);
+      asr.scriptFinal({
+        t: clock.now(),
+        speaker: `Speaker ${(i % 3) + 1}`,
+        text: `Utterance number ${i}.`,
+        final: true,
+      });
       clock.advance(20_000);
       await flush();
     }
 
     // Wake word fires, E2E drives the Q&A
-    asr.emitFinal(clock.now(), 'Speaker 1', '嘿 Nono, summarise pricing.');
+    asr.scriptFinal({
+      t: clock.now(),
+      speaker: 'Speaker 1',
+      text: '嘿 Nono, summarise pricing.',
+      final: true,
+    });
     await flush();
     e2e.scriptTurn({
       question: 'summarise pricing?',
