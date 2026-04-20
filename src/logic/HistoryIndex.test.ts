@@ -48,6 +48,27 @@ describe('HistoryIndex', () => {
     expect(list.map((m) => m.id)).toEqual(['a', 'b']);
   });
 
+  it('list() omits meetings with null ended_at', async () => {
+    const p = new InMemP();
+    p.meetings.set('done', {
+      meta: meta('done', 2000, 1000),
+      summaries: [],
+      transcript: [],
+      aiExchanges: [],
+      minutesMd: null,
+    });
+    p.meetings.set('abandoned', {
+      meta: meta('abandoned', null, 500),
+      summaries: [],
+      transcript: [],
+      aiExchanges: [],
+      minutesMd: null,
+    });
+    const h = new HistoryIndex(p as never);
+    const list = await h.list();
+    expect(list.map((m) => m.id)).toEqual(['done']);
+  });
+
   it('finds crashed meetings (missing ended_at)', async () => {
     const p = new InMemP();
     p.meetings.set('clean', {

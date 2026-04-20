@@ -46,6 +46,7 @@ pub fn run() {
             commands::meeting_fs::meeting_list,
             commands::meeting_fs::meeting_read,
             commands::meeting_fs::meeting_export_md,
+            commands::meeting_fs::meeting_delete,
             commands::window_controls::window_close,
             commands::window_controls::window_minimize,
             commands::window_controls::window_toggle_maximize,

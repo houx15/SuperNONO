@@ -48,4 +48,7 @@ export const fsAdapter: Persistence = {
   async exportMinutes(mtgId, destPath) {
     await invoke('meeting_export_md', { id: mtgId, destPath });
   },
+  async deleteMeeting(mtgId: string) {
+    await invoke('meeting_delete', { id: mtgId });
+  },
 };

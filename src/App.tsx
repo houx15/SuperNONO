@@ -166,12 +166,22 @@ export default function App() {
       await session.start(title);
       setView('meeting');
     } catch (e: unknown) {
-      const msg = (e instanceof Error ? e.message : String(e)) ?? '';
-      if (msg.includes('NotAllowed') || msg.includes('denied')) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error('startMeeting failed:', e);
+      // If a meeting dir was created before the failure point, clean it up.
+      if (session.meetingId) {
+        try {
+          await fsAdapter.deleteMeeting(session.meetingId);
+        } catch {
+          /* best effort */
+        }
+      }
+      if (msg.includes('NotAllowed') || msg.includes('denied') || msg.includes('Permission')) {
         session.setLastError('mic_denied');
       } else {
-        session.setLastError('other');
+        session.setLastError(msg || 'other');
       }
+      await refreshHistory();
     }
   };
 
@@ -330,8 +340,9 @@ export default function App() {
         {view === 'idle' && (
           <IdleView
             onStart={startMeeting}
-            lastError={session.lastError as 'mic_denied' | 'other' | null | undefined}
+            lastError={session.lastError}
             onOpenMicSettings={() => void invoke('open_mic_settings')}
+            onOpenSettings={() => setSettingsOpen(true)}
           />
         )}
         {view === 'meeting' && (

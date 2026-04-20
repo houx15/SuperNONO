@@ -3,11 +3,14 @@ import { Icon } from './Icon';
 
 interface Props {
   onStart: () => void;
-  lastError?: 'mic_denied' | 'other' | null;
+  lastError?: string | null;
   onOpenMicSettings?: () => void;
+  onOpenSettings?: () => void;
 }
 
-export function IdleView({ onStart, lastError, onOpenMicSettings }: Props) {
+export function IdleView({ onStart, lastError, onOpenMicSettings, onOpenSettings }: Props) {
+  const isMicDenied = lastError === 'mic_denied';
+  const hasGenericError = lastError && lastError !== 'mic_denied' && lastError !== 'other';
   return (
     <div className="idle-view">
       <div className="idle-inner">
@@ -18,7 +21,7 @@ export function IdleView({ onStart, lastError, onOpenMicSettings }: Props) {
         <div className="idle-sub">
           Start a session and SuperNono will listen, summarize and answer questions on demand.
         </div>
-        {lastError === 'mic_denied' && (
+        {isMicDenied && (
           <div className="mic-help">
             <h4>Microphone access denied</h4>
             <p>
@@ -26,6 +29,19 @@ export function IdleView({ onStart, lastError, onOpenMicSettings }: Props) {
               then retry.
             </p>
             <button onClick={onOpenMicSettings}>Open system settings</button>
+          </div>
+        )}
+        {hasGenericError && (
+          <div className="mic-help" style={{ borderColor: 'var(--warning)' }}>
+            <h4>⚠ 启动会议失败</h4>
+            <p style={{ fontFamily: 'var(--mono)', fontSize: 11, wordBreak: 'break-word' }}>
+              {lastError}
+            </p>
+            <p style={{ fontSize: 12 }}>
+              常见原因：凭证尚未在 Settings 中保存；网络无法到达 Volcano；麦克风或 AudioWorklet
+              加载失败。请先在 Settings 中测试凭证。
+            </p>
+            {onOpenSettings && <button onClick={onOpenSettings}>打开 Settings</button>}
           </div>
         )}
         <button className="btn btn-primary btn-start" onClick={onStart}>

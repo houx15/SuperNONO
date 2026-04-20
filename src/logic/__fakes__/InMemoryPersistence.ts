@@ -61,6 +61,10 @@ export class InMemoryPersistence implements Persistence {
     /* no-op for tests */
   }
 
+  async deleteMeeting(id: string) {
+    this.meetings.delete(id);
+  }
+
   private get(id: string): State {
     const s = this.meetings.get(id);
     if (!s) throw new Error(`no meeting ${id}`);

@@ -65,6 +65,15 @@ pub async fn meeting_create(app: AppHandle, id: String, meta_json: String) -> Re
 }
 
 #[tauri::command]
+pub async fn meeting_delete(app: AppHandle, id: String) -> Result<(), FsError> {
+    let dir = meetings_dir(&app)?.join(&id);
+    if dir.exists() {
+        fs::remove_dir_all(&dir)?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
 pub async fn meeting_write_meta(
     app: AppHandle,
     id: String,

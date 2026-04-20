@@ -10,7 +10,10 @@ export class HistoryIndex {
 
   async list(): Promise<MeetingMeta[]> {
     const all = await this.p.listMeetings();
-    return all.sort((a, b) => b.started_at - a.started_at);
+    // Skip meetings that never finished (ended_at == null). Those are either
+    // currently-running (App will overlay via activeMeetingId) or crashed /
+    // abandoned start attempts that should not clutter history.
+    return all.filter((m) => m.ended_at !== null).sort((a, b) => b.started_at - a.started_at);
   }
 
   async open(id: string): Promise<FullMeeting> {

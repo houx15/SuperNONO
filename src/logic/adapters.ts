@@ -77,6 +77,7 @@ export interface Persistence {
   listMeetings(): Promise<MeetingMeta[]>;
   readMeeting(mtgId: string): Promise<FullMeeting>;
   exportMinutes(mtgId: string, destPath: string): Promise<void>;
+  deleteMeeting(mtgId: string): Promise<void>;
 }
 
 export interface MicCaptureHandle {
