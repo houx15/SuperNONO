@@ -30,6 +30,11 @@ export function useMeetingSession(deps: UseMeetingSessionDeps) {
   const [liveSpeaker, setLiveSpeaker] = useState<string | null>(null);
   const [meetingId, setMeetingId] = useState<string | null>(null);
   const [elapsedSec, setElapsedSec] = useState(0);
+  const [status, setStatus] = useState<'idle' | 'listening' | 'reconnecting' | 'paused' | 'ended'>(
+    'idle',
+  );
+  const [amplitude, setAmplitude] = useState<number | null>(null);
+  const [lastError, setLastError] = useState<string | null>(null);
 
   const start = useCallback(
     async (title: string) => {
@@ -43,6 +48,7 @@ export function useMeetingSession(deps: UseMeetingSessionDeps) {
         config: { wakeWord: deps.wakeWord, lang: deps.lang },
       });
       sessionRef.current = session;
+
       session.on('transcript', (u) => {
         const ut = u as Utterance;
         setLiveText(ut.text);
@@ -50,16 +56,45 @@ export function useMeetingSession(deps: UseMeetingSessionDeps) {
       });
       session.on('summary', (s) => setSummaries((prev) => [...prev, s as Summary]));
       session.on('qa', (x) => setCurrentExchange(x as AiExchange));
-      session.on('orbState', (s) => setOrbState(s as OrbState));
+      session.on('orbState', (s) => {
+        // orbState events carry either an OrbState string (from QaHandoff)
+        // or { amplitude: number } (from mic rms). Handle both.
+        if (typeof s === 'string') {
+          setOrbState(s as OrbState);
+        } else if (s != null && typeof (s as { amplitude?: number }).amplitude === 'number') {
+          setAmplitude((s as { amplitude: number }).amplitude);
+        }
+      });
+      session.on('statusChange', (s) => {
+        setStatus(s as 'idle' | 'listening' | 'reconnecting' | 'paused' | 'ended');
+      });
+      session.on('error', (e) => {
+        const err = e as { code?: string; message?: string } | null;
+        setLastError(err?.code ?? err?.message ?? 'unknown');
+      });
+
       await session.start(title);
       setMeetingId(session.id);
       setElapsedSec(0);
+      setStatus('listening');
     },
     [deps.asr, deps.e2e, deps.llm, deps.persistence, deps.mic, deps.wakeWord, deps.lang],
   );
 
   const stop = useCallback(async () => {
     await sessionRef.current?.stop();
+    setStatus('ended');
+    setAmplitude(null);
+  }, []);
+
+  const resume = useCallback(async () => {
+    const session = sessionRef.current;
+    if (
+      session &&
+      typeof (session as unknown as { resume?: () => Promise<void> }).resume === 'function'
+    ) {
+      await (session as unknown as { resume: () => Promise<void> }).resume();
+    }
   }, []);
 
   useEffect(() => {
@@ -71,6 +106,7 @@ export function useMeetingSession(deps: UseMeetingSessionDeps) {
   return {
     start,
     stop,
+    resume,
     meetingId,
     summaries,
     activeSummary,
@@ -79,5 +115,9 @@ export function useMeetingSession(deps: UseMeetingSessionDeps) {
     liveText,
     liveSpeaker,
     elapsedSec,
+    status,
+    amplitude,
+    lastError,
+    setLastError,
   };
 }
