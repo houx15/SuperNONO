@@ -3,26 +3,26 @@ import type { Utterance, AsrError, TestResult } from '../types';
 
 export class FakeAsrClient implements AsrClient {
   public sentChunks: Uint8Array[] = [];
-  private started = false;
   private listeners = new Map<string, Set<(p: unknown) => void>>();
 
-  async start(_opts: AsrOpts): Promise<void> {
-    this.started = true;
-  }
-  async stop(): Promise<void> {
-    this.started = false;
-  }
+  async start(_opts: AsrOpts): Promise<void> {}
+  async stop(): Promise<void> {}
 
   sendAudio(chunk: Uint8Array): void {
     this.sentChunks.push(chunk);
   }
 
-  on(event: 'partial' | 'final' | 'error' | 'closed', cb: (p: never) => void): Unsubscribe {
+  on(event: 'partial', cb: (u: Utterance) => void): Unsubscribe;
+  on(event: 'final', cb: (u: Utterance) => void): Unsubscribe;
+  on(event: 'error', cb: (e: AsrError) => void): Unsubscribe;
+  on(event: 'closed', cb: () => void): Unsubscribe;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  on(event: string, cb: (p: any) => void): Unsubscribe {
     if (!this.listeners.has(event)) this.listeners.set(event, new Set());
     const set = this.listeners.get(event)!;
-    set.add(cb as (p: unknown) => void);
+    set.add(cb);
     return () => {
-      set.delete(cb as (p: unknown) => void);
+      set.delete(cb);
     };
   }
 

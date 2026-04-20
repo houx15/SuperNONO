@@ -39,9 +39,9 @@ describe('MicCapture', () => {
   it('starts, adds worklet, wires node', async () => {
     const m = new MicCapture({
       contextFactory: () => ctx as unknown as AudioContext,
-      getUserMedia: getStream,
+      getUserMedia: getStream as unknown as (c: MediaStreamConstraints) => Promise<MediaStream>,
       workletUrl: '/worklet/downsample-worklet.js',
-      buildNode,
+      buildNode: buildNode as unknown as (ctx: AudioContext) => AudioWorkletNode,
     });
     await m.start();
     expect(ctx.audioWorklet.addModule).toHaveBeenCalledWith('/worklet/downsample-worklet.js');
@@ -51,9 +51,9 @@ describe('MicCapture', () => {
   it('emits chunk from worklet port message', async () => {
     const m = new MicCapture({
       contextFactory: () => ctx as unknown as AudioContext,
-      getUserMedia: getStream,
+      getUserMedia: getStream as unknown as (c: MediaStreamConstraints) => Promise<MediaStream>,
       workletUrl: '/worklet/downsample-worklet.js',
-      buildNode,
+      buildNode: buildNode as unknown as (ctx: AudioContext) => AudioWorkletNode,
     });
     await m.start();
     const chunks: Uint8Array[] = [];
@@ -67,9 +67,9 @@ describe('MicCapture', () => {
   it('emits rms', async () => {
     const m = new MicCapture({
       contextFactory: () => ctx as unknown as AudioContext,
-      getUserMedia: getStream,
+      getUserMedia: getStream as unknown as (c: MediaStreamConstraints) => Promise<MediaStream>,
       workletUrl: '/worklet/downsample-worklet.js',
-      buildNode,
+      buildNode: buildNode as unknown as (ctx: AudioContext) => AudioWorkletNode,
     });
     await m.start();
     const seen: number[] = [];
@@ -81,9 +81,9 @@ describe('MicCapture', () => {
   it('stop closes audio resources', async () => {
     const m = new MicCapture({
       contextFactory: () => ctx as unknown as AudioContext,
-      getUserMedia: getStream,
+      getUserMedia: getStream as unknown as (c: MediaStreamConstraints) => Promise<MediaStream>,
       workletUrl: '/worklet/downsample-worklet.js',
-      buildNode,
+      buildNode: buildNode as unknown as (ctx: AudioContext) => AudioWorkletNode,
     });
     await m.start();
     await m.stop();
@@ -94,9 +94,9 @@ describe('MicCapture', () => {
     const failing = vi.fn().mockRejectedValue(new Error('NotAllowedError'));
     const m = new MicCapture({
       contextFactory: () => ctx as unknown as AudioContext,
-      getUserMedia: failing,
+      getUserMedia: failing as unknown as (c: MediaStreamConstraints) => Promise<MediaStream>,
       workletUrl: '/worklet/downsample-worklet.js',
-      buildNode,
+      buildNode: buildNode as unknown as (ctx: AudioContext) => AudioWorkletNode,
     });
     await expect(m.start()).rejects.toThrow('NotAllowedError');
   });

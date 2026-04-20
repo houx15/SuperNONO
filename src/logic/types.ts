@@ -44,7 +44,7 @@ export interface FullMeeting {
   minutesMd: string | null;
 }
 
-export type TestResult = { ok: true } | { ok: false; reason: string };
+export type TestResult = { ok: boolean; reason?: string };
 
 export type OrbState = 'idle' | 'activated' | 'thinking' | 'speaking';
 

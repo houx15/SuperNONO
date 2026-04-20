@@ -27,7 +27,7 @@ describe('FakeAsrClient', () => {
     await c.start({ lang: 'zh', enableSpeakerId: false });
     const seen: string[] = [];
     c.on('final', (u) => seen.push(u.text));
-    c.scriptFinal({ text: 'hi', startMs: 0, endMs: 100, isFinal: true });
+    c.scriptFinal({ t: 0, speaker: 'Speaker 1', text: 'hi', final: true });
     expect(seen).toEqual(['hi']);
   });
 });

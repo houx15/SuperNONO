@@ -4,10 +4,10 @@ import { DoubaoLlmClient } from './DoubaoLlmClient';
 describe('DoubaoLlmClient.complete', () => {
   let originalFetch: typeof fetch;
   beforeEach(() => {
-    originalFetch = global.fetch;
+    originalFetch = globalThis.fetch;
   });
   afterEach(() => {
-    global.fetch = originalFetch;
+    globalThis.fetch = originalFetch;
   });
 
   it('POSTs to Ark with Bearer auth + default model', async () => {
@@ -16,7 +16,7 @@ describe('DoubaoLlmClient.complete', () => {
       status: 200,
       json: async () => ({ choices: [{ message: { content: 'hi there' } }] }),
     });
-    global.fetch = fetchSpy as unknown as typeof fetch;
+    globalThis.fetch = fetchSpy as unknown as typeof fetch;
 
     const c = new DoubaoLlmClient('sk-key');
     const resp = await c.complete({ prompt: 'hello' });
@@ -35,7 +35,7 @@ describe('DoubaoLlmClient.complete', () => {
   });
 
   it('surfaces 401 as auth error', async () => {
-    global.fetch = vi.fn().mockResolvedValue({
+    globalThis.fetch = vi.fn().mockResolvedValue({
       ok: false,
       status: 401,
       text: async () => '{"error":{"message":"bad key"}}',
@@ -48,7 +48,7 @@ describe('DoubaoLlmClient.complete', () => {
   });
 
   it('surfaces 429 as rate_limit retryable', async () => {
-    global.fetch = vi.fn().mockResolvedValue({
+    globalThis.fetch = vi.fn().mockResolvedValue({
       ok: false,
       status: 429,
       text: async () => 'throttled',
@@ -61,7 +61,7 @@ describe('DoubaoLlmClient.complete', () => {
   });
 
   it('surfaces 5xx as server retryable', async () => {
-    global.fetch = vi.fn().mockResolvedValue({
+    globalThis.fetch = vi.fn().mockResolvedValue({
       ok: false,
       status: 503,
       text: async () => 'down',
@@ -74,7 +74,7 @@ describe('DoubaoLlmClient.complete', () => {
   });
 
   it('surfaces network failure', async () => {
-    global.fetch = vi
+    globalThis.fetch = vi
       .fn()
       .mockRejectedValue(new TypeError('Failed to fetch')) as unknown as typeof fetch;
     const c = new DoubaoLlmClient('k');
@@ -95,7 +95,7 @@ describe('DoubaoLlmClient.testCredentials', () => {
     /* cleanup */
   });
   it('returns ok on 200', async () => {
-    global.fetch = vi.fn().mockResolvedValue({
+    globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
       json: async () => ({ choices: [{ message: { content: 'ok' } }] }),
@@ -105,7 +105,7 @@ describe('DoubaoLlmClient.testCredentials', () => {
     expect(r.ok).toBe(true);
   });
   it('returns !ok with reason on 401', async () => {
-    global.fetch = vi.fn().mockResolvedValue({
+    globalThis.fetch = vi.fn().mockResolvedValue({
       ok: false,
       status: 401,
       text: async () => 'bad',
@@ -116,7 +116,7 @@ describe('DoubaoLlmClient.testCredentials', () => {
     expect(r.reason).toMatch(/401|auth|key/i);
   });
   it('returns !ok with reason on network fail', async () => {
-    global.fetch = vi.fn().mockRejectedValue(new TypeError('fail')) as unknown as typeof fetch;
+    globalThis.fetch = vi.fn().mockRejectedValue(new TypeError('fail')) as unknown as typeof fetch;
     const c = new DoubaoLlmClient(null);
     const r = await c.testCredentials('sk');
     expect(r.ok).toBe(false);
@@ -141,7 +141,7 @@ describe('DoubaoLlmClient.stream', () => {
       },
       releaseLock() {},
     };
-    global.fetch = vi.fn().mockResolvedValue({
+    globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
       body: { getReader: () => reader },
