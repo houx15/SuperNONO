@@ -13,6 +13,7 @@ export interface MeetingViewProps {
   currentExchange: AiExchange | null;
   orbState: OrbState;
   orbSize: number;
+  amplitude?: number | null;
   liveText: string;
   liveSpeaker: string | null;
   wakeWord: string;
@@ -77,7 +78,7 @@ export function MeetingView(p: MeetingViewProps) {
               {stateLabel}
             </div>
             <div className="orb-stage">
-              <Orb state={p.orbState} size={p.orbSize} />
+              <Orb state={p.orbState} size={p.orbSize} amplitude={p.amplitude ?? undefined} />
             </div>
           </div>
           <LiveTranscript displayText={p.liveText} speaker={p.liveSpeaker} state={p.orbState} />

@@ -26,9 +26,9 @@ import { DoubaoLlmClient } from './adapters/DoubaoLlmClient';
 import { FixtureAsrClient } from './adapters/FixtureAsrClient';
 import { fsAdapter } from './adapters/FsAdapter';
 import { DevTweaks } from './ui/DevTweaks';
+import { MicCapture } from './audio/MicCapture';
 import { FakeE2eClient } from './logic/__fakes__/FakeE2eClient';
 import { FakeLlmClient } from './logic/__fakes__/FakeLlmClient';
-import { FakeMicCapture } from './logic/__fakes__/FakeMicCapture';
 import { loadAsrFixture, loadDoubaoRules } from './logic/fixtures';
 import type { FullMeeting } from './logic/types';
 
@@ -125,8 +125,15 @@ export default function App() {
   const asr = fixtureMode?.asr ?? realAsr;
   const e2e = fixtureMode?.e2e ?? realE2e;
   const llm = fixtureMode?.llm ?? realLlm;
-  // TODO(M2): replace FakeMicCapture with real MicCapture once audio wiring lands
-  const mic = useMemo(() => new FakeMicCapture(), []);
+  const mic = useMemo(
+    () =>
+      new MicCapture({
+        contextFactory: () => new AudioContext(),
+        getUserMedia: (c) => navigator.mediaDevices.getUserMedia(c),
+        workletUrl: '/worklet/downsample-worklet.js',
+      }),
+    [],
+  );
 
   const session = useMeetingSession({
     asr,
@@ -145,8 +152,17 @@ export default function App() {
       /* non-Tauri env or plugin missing */
     }
     const title = `Meeting · ${new Date().toLocaleString()}`;
-    await session.start(title);
-    setView('meeting');
+    try {
+      await session.start(title);
+      setView('meeting');
+    } catch (e: unknown) {
+      const msg = (e instanceof Error ? e.message : String(e)) ?? '';
+      if (msg.includes('NotAllowed') || msg.includes('denied')) {
+        session.setLastError('mic_denied');
+      } else {
+        session.setLastError('other');
+      }
+    }
   };
 
   useEffect(() => {
@@ -288,8 +304,8 @@ export default function App() {
         onToggleTheme={toggle}
         onOpenSettings={() => setSettingsOpen(true)}
         isMeetingActive={view === 'meeting'}
-        // TODO: wire from useMeetingSession status after Phase 11
-        status="idle"
+        status={session.status}
+        onResumeClick={session.resume}
       />
       <div
         className="sidebar-resize-handle"
@@ -301,7 +317,13 @@ export default function App() {
         role="separator"
       />
       <div className="main-pane">
-        {view === 'idle' && <IdleView onStart={startMeeting} />}
+        {view === 'idle' && (
+          <IdleView
+            onStart={startMeeting}
+            lastError={session.lastError as 'mic_denied' | 'other' | null | undefined}
+            onOpenMicSettings={() => void invoke('open_mic_settings')}
+          />
+        )}
         {view === 'meeting' && (
           <MeetingView
             title="Current meeting"
@@ -311,6 +333,7 @@ export default function App() {
             currentExchange={session.currentExchange}
             orbState={session.orbState}
             orbSize={180}
+            amplitude={session.amplitude}
             liveText={session.liveText}
             liveSpeaker={session.liveSpeaker}
             wakeWord={settings.wakeWord}
