@@ -1,10 +1,9 @@
-import type { AiExchange, OrbState, Summary, Utterance } from '../logic/types';
+import type { AiExchange, OrbState, Summary } from '../logic/types';
 import { Orb } from './Orb';
 import { Icon } from './Icon';
 import { SummaryCard } from './SummaryCard';
 import { AiBlock } from './AiBlock';
-import { LiveTranscript } from './LiveTranscript';
-import { LiveTranscriptPanel } from './LiveTranscriptPanel';
+import { LiveTranscriptTicker } from './LiveTranscriptTicker';
 
 export interface MeetingViewProps {
   title: string;
@@ -17,7 +16,6 @@ export interface MeetingViewProps {
   amplitude?: number | null;
   liveText: string;
   liveSpeaker: string | null;
-  transcript: Utterance[];
   lastTranscriptAt: number | null;
   wakeWord: string;
   onOpenSettings: () => void;
@@ -56,10 +54,12 @@ export function MeetingView(p: MeetingViewProps) {
 
       <main className="main">
         <div className="column">
-          <LiveTranscriptPanel
-            transcript={p.transcript}
+          <LiveTranscriptTicker
+            text={p.liveText}
+            speaker={p.liveSpeaker}
             lastTranscriptAt={p.lastTranscriptAt}
             elapsedSec={p.elapsedSec}
+            state={p.orbState}
           />
           {p.summaries.map((s, i) => (
             <SummaryCard key={i} s={s} />
@@ -89,7 +89,6 @@ export function MeetingView(p: MeetingViewProps) {
               <Orb state={p.orbState} size={p.orbSize} amplitude={p.amplitude ?? undefined} />
             </div>
           </div>
-          <LiveTranscript displayText={p.liveText} speaker={p.liveSpeaker} state={p.orbState} />
           <div className="orb-hint">
             {p.orbState === 'idle' ? (
               <>

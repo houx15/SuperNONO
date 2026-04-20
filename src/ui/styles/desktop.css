@@ -486,90 +486,119 @@ html, body {
 /* --------------------------------------------------------------
    Status bar (bottom) — fixed, translucent, technical
    -------------------------------------------------------------- */
-/* Live transcript panel (top of main column during meetings) */
-.live-transcript-panel {
+/* Live transcript ticker (top of main column during meetings). Shows
+   the currently-spoken sentence with fade edges on both sides. */
+.live-ticker {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--r-md);
   margin-bottom: 16px;
   overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  max-height: 320px;
+  position: sticky;
+  top: 0;
+  z-index: 3;
 }
-.live-transcript-panel-head {
+.live-ticker-head {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 14px;
+  padding: 8px 14px;
   border-bottom: 1px solid var(--border);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
+  color: var(--fg-soft);
   background: var(--bg-subtle);
 }
-.live-transcript-panel-head .dot-live {
+.live-ticker-dot {
   width: 7px;
   height: 7px;
   border-radius: 50%;
   background: var(--accent);
-  animation: live-pulse 2s ease-in-out infinite;
+  animation: live-ticker-pulse 2s ease-in-out infinite;
 }
-@keyframes live-pulse {
+.live-ticker-dot.stale {
+  background: var(--warning);
+  animation: none;
+}
+@keyframes live-ticker-pulse {
   0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
+  50% { opacity: 0.35; }
 }
-.live-transcript-count {
+.live-ticker-label { letter-spacing: 0.02em; }
+.live-ticker-speaker {
   font-family: var(--mono);
   font-size: 10px;
-  color: var(--fg-dim);
+  color: var(--accent);
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 1px 8px;
+  font-weight: 500;
 }
-.live-transcript-status {
+.live-ticker-freshness {
   margin-left: auto;
-  font-weight: 400;
-  font-size: 11px;
-  color: var(--fg-dim);
-  font-family: var(--mono);
-}
-.live-transcript-status.stale { color: var(--warning); font-weight: 600; }
-.live-transcript-panel-body {
-  padding: 8px 14px;
-  overflow-y: auto;
-  flex: 1;
-  font-size: 13px;
-  line-height: 1.55;
-}
-.live-transcript-empty {
-  padding: 12px 4px;
-  color: var(--fg-dim);
-  font-size: 12px;
-  font-style: italic;
-}
-.live-transcript-line {
-  padding: 6px 0;
-  border-bottom: 1px dashed var(--border);
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-.live-transcript-line:last-child { border-bottom: none; }
-.live-transcript-speaker {
-  font-family: var(--mono);
-  font-size: 11px;
-  color: var(--accent);
-  min-width: 60px;
-}
-.live-transcript-time {
   font-family: var(--mono);
   font-size: 10px;
   color: var(--fg-dim);
+  font-weight: 400;
 }
-.live-transcript-text {
-  flex: 1;
+.live-ticker-freshness.stale { color: var(--warning); font-weight: 600; }
+
+.live-ticker-window {
+  position: relative;
+  padding: 14px 28px;
+  min-height: 40px;
+  max-height: 72px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+}
+.live-ticker-fade-left,
+.live-ticker-fade-right {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 36px;
+  pointer-events: none;
+  z-index: 2;
+}
+.live-ticker-fade-left {
+  left: 0;
+  background: linear-gradient(to right, var(--surface), color-mix(in srgb, var(--surface) 0%, transparent));
+}
+.live-ticker-fade-right {
+  right: 0;
+  background: linear-gradient(to left, var(--surface), color-mix(in srgb, var(--surface) 0%, transparent));
+}
+.live-ticker-text {
+  font-size: 16px;
+  line-height: 1.45;
   color: var(--fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  letter-spacing: 0.01em;
+  flex: 1;
+  direction: rtl; /* keep the tail (newest characters) anchored on the right */
+}
+.live-ticker-text > span { direction: ltr; unicode-bidi: embed; }
+.live-ticker-placeholder {
+  color: var(--fg-dim);
+  font-style: italic;
+  font-size: 13px;
+}
+.live-ticker-cursor {
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  background: var(--accent);
+  margin-left: 4px;
+  vertical-align: -2px;
+  animation: live-ticker-cursor 1s steps(2) infinite;
+}
+@keyframes live-ticker-cursor {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
 }
 
 .statusbar {

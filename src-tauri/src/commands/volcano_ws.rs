@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use dashmap::DashMap;
 use futures_util::{SinkExt, StreamExt};
@@ -12,6 +13,22 @@ use tokio_tungstenite::{
     tungstenite::{client::IntoClientRequest, protocol::Message},
 };
 use uuid::Uuid;
+
+/// Build the exact JSON payload the TS `Utterance` type expects.
+/// Centralized so the Rust event-emit contract can be unit-tested and
+/// doesn't silently drift from the TS side.
+pub fn utterance_payload(text: &str, definite: bool) -> serde_json::Value {
+    let t_ms = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0);
+    serde_json::json!({
+        "t": t_ms,
+        "speaker": "Speaker",
+        "text": text,
+        "final": definite,
+    })
+}
 
 pub struct AsrSession {
     pub audio_tx: mpsc::Sender<Vec<u8>>,
@@ -93,8 +110,12 @@ pub mod frame {
     #[derive(Debug, Clone, Deserialize)]
     pub struct Utterance {
         pub text: String,
+        // Received from Volcano but currently unused on the Rust side;
+        // kept for future minute-level diagnostics.
+        #[allow(dead_code)]
         #[serde(default)]
         pub start_time: u64,
+        #[allow(dead_code)]
         #[serde(default)]
         pub end_time: u64,
         #[serde(default)]
@@ -389,12 +410,7 @@ pub async fn asr_start(
                         match f {
                             frame::ServerFrame::Response { utterances, .. } => {
                                 for u in utterances {
-                                    let payload = serde_json::json!({
-                                        "text": u.text,
-                                        "startMs": u.start_time,
-                                        "endMs": u.end_time,
-                                        "isFinal": u.definite,
-                                    });
+                                    let payload = utterance_payload(&u.text, u.definite);
                                     let ev = if u.definite {
                                         "asr://final"
                                     } else {
@@ -544,5 +560,43 @@ mod ipc_contract_tests {
         let parsed: AsrStartParams = serde_json::from_value(json).unwrap();
         assert_eq!(parsed.lang, "en");
         assert!(!parsed.enable_speaker_id);
+    }
+
+    #[test]
+    fn utterance_payload_matches_ts_utterance_type() {
+        // TS `Utterance` at src/logic/types.ts declares exactly these
+        // four fields: t (number), speaker (string), text (string),
+        // final (boolean). Rust must emit keys that match — otherwise
+        // TS reads `final = undefined`, treats every utterance as a
+        // partial, and SummaryScheduler sees no finals in the buffer.
+        let payload = super::utterance_payload("hello", true);
+        let obj = payload.as_object().expect("payload is a JSON object");
+
+        // Exactly these four keys, no more, no less.
+        let keys: std::collections::BTreeSet<&str> = obj.keys().map(|s| s.as_str()).collect();
+        let expected: std::collections::BTreeSet<&str> =
+            ["t", "speaker", "text", "final"].into_iter().collect();
+        assert_eq!(
+            keys, expected,
+            "Rust utterance payload keys drifted from TS Utterance"
+        );
+
+        // Types.
+        assert!(obj["t"].is_number(), "t must be a number");
+        assert!(obj["speaker"].is_string(), "speaker must be a string");
+        assert!(obj["text"].is_string(), "text must be a string");
+        assert!(obj["final"].is_boolean(), "final must be a boolean");
+
+        // Values round-trip.
+        assert_eq!(obj["text"], "hello");
+        assert_eq!(obj["final"], true);
+    }
+
+    #[test]
+    fn utterance_payload_propagates_final_flag() {
+        let p_partial = super::utterance_payload("half", false);
+        let p_final = super::utterance_payload("done", true);
+        assert_eq!(p_partial["final"], false);
+        assert_eq!(p_final["final"], true);
     }
 }
