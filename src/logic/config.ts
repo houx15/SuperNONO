@@ -1,4 +1,8 @@
 export const SUMMARY_INTERVAL_MS = 5 * 60 * 1000;
+/** First summary fires earlier so the user sees something within a minute,
+ *  not 5 minutes of staring at a blank screen. Subsequent summaries use
+ *  SUMMARY_INTERVAL_MS. */
+export const FIRST_SUMMARY_MS = 60 * 1000;
 export const SILENCE_TIMEOUT_MS = 2000;
 export const MAX_RAW_WINDOW_MIN_SUMMARY = 5;
 export const MAX_RAW_WINDOW_MIN_QA = 2;

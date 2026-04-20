@@ -1,7 +1,12 @@
 import type { Clock } from './clock';
 import type { TranscriptBuffer } from './TranscriptBuffer';
 import type { Summary } from './types';
-import { SUMMARY_INTERVAL_MS, MAX_RAW_WINDOW_MIN_SUMMARY, MAX_CONTEXT_CHARS } from './config';
+import {
+  SUMMARY_INTERVAL_MS,
+  FIRST_SUMMARY_MS,
+  MAX_RAW_WINDOW_MIN_SUMMARY,
+  MAX_CONTEXT_CHARS,
+} from './config';
 
 export interface LlmMinimal {
   complete(req: { prompt: string }): Promise<{ text: string }>;
@@ -17,6 +22,7 @@ export interface SummarySchedulerDeps {
 export class SummaryScheduler {
   private running = false;
   private previous: Summary | null = null;
+  private hasFired = false;
 
   constructor(private deps: SummarySchedulerDeps) {}
 
@@ -31,10 +37,14 @@ export class SummaryScheduler {
 
   private schedule() {
     if (!this.running) return;
+    // First summary fires early (FIRST_SUMMARY_MS ≈ 60 s) so the user sees
+    // something quickly. Subsequent summaries use the full 5-min cadence.
+    const delay = this.hasFired ? SUMMARY_INTERVAL_MS : FIRST_SUMMARY_MS;
     this.deps.clock.setTimeout(async () => {
       await this.tick();
+      this.hasFired = true;
       this.schedule();
-    }, SUMMARY_INTERVAL_MS);
+    }, delay);
   }
 
   private async tick() {

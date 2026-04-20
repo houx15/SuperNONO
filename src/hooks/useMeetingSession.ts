@@ -28,6 +28,9 @@ export function useMeetingSession(deps: UseMeetingSessionDeps) {
   const [orbState, setOrbState] = useState<OrbState>('idle');
   const [liveText, setLiveText] = useState('');
   const [liveSpeaker, setLiveSpeaker] = useState<string | null>(null);
+  /** Full running list of finalized utterances, prepended for reverse-chron display. */
+  const [transcript, setTranscript] = useState<Utterance[]>([]);
+  const [lastTranscriptAt, setLastTranscriptAt] = useState<number | null>(null);
   const [meetingId, setMeetingId] = useState<string | null>(null);
   const [elapsedSec, setElapsedSec] = useState(0);
   const [status, setStatus] = useState<'idle' | 'listening' | 'reconnecting' | 'paused' | 'ended'>(
@@ -53,6 +56,10 @@ export function useMeetingSession(deps: UseMeetingSessionDeps) {
         const ut = u as Utterance;
         setLiveText(ut.text);
         setLiveSpeaker(ut.speaker);
+        if (ut.final) {
+          setTranscript((prev) => [...prev, ut]);
+          setLastTranscriptAt(Date.now());
+        }
       });
       session.on('summary', (s) => setSummaries((prev) => [...prev, s as Summary]));
       session.on('qa', (x) => setCurrentExchange(x as AiExchange));
@@ -73,6 +80,13 @@ export function useMeetingSession(deps: UseMeetingSessionDeps) {
         setLastError(err?.code ?? err?.message ?? 'unknown');
       });
 
+      // Reset per-meeting state so a second meeting in the same app session
+      // doesn't show the previous meeting's transcript.
+      setTranscript([]);
+      setLastTranscriptAt(null);
+      setSummaries([]);
+      setLiveText('');
+      setLiveSpeaker(null);
       await session.start(title);
       setMeetingId(session.id);
       setElapsedSec(0);
@@ -114,6 +128,8 @@ export function useMeetingSession(deps: UseMeetingSessionDeps) {
     orbState,
     liveText,
     liveSpeaker,
+    transcript,
+    lastTranscriptAt,
     elapsedSec,
     status,
     amplitude,

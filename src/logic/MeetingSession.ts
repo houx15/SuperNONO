@@ -89,6 +89,16 @@ export class MeetingSession {
     this.asrUnsub.push(this.deps.asr.on('final', (u) => this.handleUtterance(u as Utterance)));
     this.asrUnsub.push(this.deps.asr.on('partial', (u) => this.buffer.append(u as Utterance)));
     this.asrUnsub.push(this.deps.asr.on('error', this.onAsrError));
+    // If the server silently closes the WS (inactivity timeout, server
+    // restart, network blip) we used to do nothing — cpal kept firing
+    // audio into a dead channel and the user saw transcripts just stop.
+    // Treat close as a retryable network error so the reconnect state
+    // machine kicks in.
+    this.asrUnsub.push(
+      this.deps.asr.on('closed', () => {
+        this.onAsrError({ kind: 'network', message: 'ASR connection closed', retryable: true });
+      }),
+    );
 
     this.deps.mic.on('chunk', (c) => this.router.feed(c));
     this.deps.mic.on('rms', (r) => this.emit('orbState', { amplitude: r }));

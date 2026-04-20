@@ -373,6 +373,8 @@ export default function App() {
             amplitude={session.amplitude}
             liveText={session.liveText}
             liveSpeaker={session.liveSpeaker}
+            transcript={session.transcript}
+            lastTranscriptAt={session.lastTranscriptAt}
             wakeWord={settings.wakeWord}
             onOpenSettings={() => setSettingsOpen(true)}
             onEnd={endMeeting}
