@@ -12,6 +12,15 @@ export function useHistory() {
     setList(await h.list());
   }, []);
 
+  const refreshCrashed = useCallback(async () => {
+    try {
+      const h = new HistoryIndex(fsAdapter);
+      setCrashed(await h.crashRecoveryScan());
+    } catch {
+      /* non-Tauri env */
+    }
+  }, []);
+
   useEffect(() => {
     (async () => {
       try {
@@ -26,5 +35,5 @@ export function useHistory() {
     })();
   }, []);
 
-  return { list, crashed, refresh };
+  return { list, crashed, refresh, refreshCrashed };
 }

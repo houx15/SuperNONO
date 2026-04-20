@@ -125,8 +125,19 @@ export class MeetingSession {
       onAudioChunk: (c) => this.deps.audioPlayer?.enqueue(c),
     });
 
-    await this.deps.mic.start();
-    await this.deps.asr.start({ lang: this.deps.config.lang, enableSpeakerId: true });
+    // Order matters: start ASR before the mic so a failed handshake doesn't
+    // leave cpal capturing (and firing 5 Hz "session not found" errors).
+    try {
+      await this.deps.asr.start({ lang: this.deps.config.lang, enableSpeakerId: true });
+      await this.deps.mic.start();
+    } catch (e) {
+      this.running = false;
+      for (const unsub of this.asrUnsub) unsub();
+      this.asrUnsub = [];
+      await this.deps.mic.stop().catch(() => {});
+      await this.deps.asr.stop().catch(() => {});
+      throw e;
+    }
     this.setStatus('listening');
     this.scheduler.start();
   }

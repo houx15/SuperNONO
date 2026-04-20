@@ -42,7 +42,7 @@ type View = 'idle' | 'meeting' | 'past';
 export default function App() {
   const { theme, toggle } = useTheme();
   const { state: settings, setState: setSettings, save: saveSettings, loaded } = useSettings();
-  const { list: history, crashed, refresh: refreshHistory } = useHistory();
+  const { list: history, crashed, refresh: refreshHistory, refreshCrashed } = useHistory();
   const [crashModalOpen, setCrashModalOpen] = useState(false);
 
   const [view, setView] = useState<View>('idle');
@@ -225,10 +225,16 @@ export default function App() {
     }
   };
 
+  const [crashModalSeen, setCrashModalSeen] = useState(false);
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setCrashModalOpen(crashed.length > 0);
-  }, [crashed]);
+    // Only auto-open once — don't reopen if user has dismissed it.
+    if (!crashModalSeen && crashed.length > 0) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setCrashModalOpen(true);
+
+      setCrashModalSeen(true);
+    }
+  }, [crashed, crashModalSeen]);
 
   const finalizeCrashed = async (id: string) => {
     try {
@@ -251,10 +257,14 @@ export default function App() {
     }
   };
 
-  const discardCrashed = async (_id: string) => {
-    // For M1 we don't have a delete-folder Rust command; mark as ended with no minutes.
-    // A follow-up task can add `meeting_delete`.
+  const discardCrashed = async (id: string) => {
+    try {
+      await fsAdapter.deleteMeeting(id);
+    } catch {
+      /* best effort */
+    }
     await refreshHistory();
+    await refreshCrashed();
   };
 
   const downloadMd = async () => {
@@ -378,16 +388,15 @@ export default function App() {
         />
       )}
 
-      {crashModalOpen && (
+      {crashModalOpen && crashed.length > 0 && (
         <CrashRecoveryModal
           crashed={crashed}
           onFinalize={async (id) => {
             await finalizeCrashed(id);
-            setCrashModalOpen(false);
+            await refreshCrashed();
           }}
           onDiscard={async (id) => {
             await discardCrashed(id);
-            setCrashModalOpen(false);
           }}
           onClose={() => setCrashModalOpen(false)}
         />

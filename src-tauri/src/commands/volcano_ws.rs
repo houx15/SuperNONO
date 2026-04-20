@@ -73,6 +73,7 @@ impl TypedError {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct AsrStartParams {
     pub lang: String,
     pub enable_speaker_id: bool,

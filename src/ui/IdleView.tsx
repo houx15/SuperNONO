@@ -33,15 +33,27 @@ export function IdleView({ onStart, lastError, onOpenMicSettings, onOpenSettings
         )}
         {hasGenericError && (
           <div className="mic-help" style={{ borderColor: 'var(--warning)' }}>
-            <h4>⚠ 启动会议失败</h4>
-            <p style={{ fontFamily: 'var(--mono)', fontSize: 11, wordBreak: 'break-word' }}>
+            <h4 style={{ color: 'var(--warning)' }}>⚠ 启动会议失败</h4>
+            <pre
+              style={{
+                fontFamily: 'var(--mono)',
+                fontSize: 12,
+                whiteSpace: 'pre-wrap',
+                wordBreak: 'break-word',
+                background: 'var(--bg-subtle)',
+                padding: '8px 10px',
+                borderRadius: 4,
+                margin: '6px 0',
+                border: '1px solid var(--border)',
+              }}
+            >
               {lastError}
-            </p>
-            <p style={{ fontSize: 12 }}>
-              常见原因：凭证尚未在 Settings 中保存；网络无法到达 Volcano；麦克风或 AudioWorklet
-              加载失败。请先在 Settings 中测试凭证。
-            </p>
-            {onOpenSettings && <button onClick={onOpenSettings}>打开 Settings</button>}
+            </pre>
+            {onOpenSettings && (
+              <button onClick={onOpenSettings} style={{ marginTop: 4 }}>
+                打开 Settings
+              </button>
+            )}
           </div>
         )}
         <button className="btn btn-primary btn-start" onClick={onStart}>
