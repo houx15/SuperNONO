@@ -3,6 +3,7 @@ import { MeetingSession } from './MeetingSession';
 import { FakeAsrClient } from './__fakes__/FakeAsrClient';
 import { FakeE2eClient } from './__fakes__/FakeE2eClient';
 import { FakeLlmClient } from './__fakes__/FakeLlmClient';
+import { FakeMicCapture } from './__fakes__/FakeMicCapture';
 import { InMemoryPersistence } from './__fakes__/InMemoryPersistence';
 import { FakeClock } from './__fakes__/FakeClock';
 import { SUMMARY_INTERVAL_MS, DEFAULT_WAKE_WORD } from './config';
@@ -24,15 +25,17 @@ function makeSession() {
   ]);
   const persistence = new InMemoryPersistence();
   const clock = new FakeClock(1_700_000_000_000);
+  const mic = new FakeMicCapture();
   const session = new MeetingSession({
     asr,
     e2e,
     llm,
     persistence,
     clock,
+    mic,
     config: { wakeWord: DEFAULT_WAKE_WORD, lang: 'zh' },
   });
-  return { session, asr, e2e, llm, persistence, clock };
+  return { session, asr, e2e, llm, persistence, clock, mic };
 }
 
 async function flush() {
@@ -86,5 +89,26 @@ describe('MeetingSession', () => {
     const full = await persistence.readMeeting(session.id!);
     expect(full.meta.ended_at).not.toBeNull();
     expect(full.minutesMd).toContain('# Meeting');
+  });
+
+  it('routes mic chunks to ASR by default', async () => {
+    const { session, asr, mic } = makeSession();
+    await session.start('Meeting');
+    mic.scriptChunk(new Uint8Array([1, 2, 3]));
+    mic.scriptChunk(new Uint8Array([4]));
+    expect(asr.sentChunks.length).toBe(2);
+  });
+
+  it('emits amplitude from mic rms', async () => {
+    const { session, mic } = makeSession();
+    const levels: number[] = [];
+    session.on('orbState', (s) => {
+      if (typeof (s as { amplitude?: number }).amplitude === 'number')
+        levels.push((s as { amplitude: number }).amplitude);
+    });
+    await session.start('Meeting');
+    mic.scriptRms(0.3);
+    mic.scriptRms(0.7);
+    expect(levels).toEqual([0.3, 0.7]);
   });
 });

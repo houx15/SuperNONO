@@ -1,4 +1,4 @@
-import type { AsrClient, E2eClient, LlmClient, Persistence } from './adapters';
+import type { AsrClient, E2eClient, LlmClient, MicCaptureHandle, Persistence } from './adapters';
 import type { Clock } from './clock';
 import type { AiExchange, MeetingMeta, OrbState, Summary, Utterance } from './types';
 import { SCHEMA_VERSION, makeMeetingId } from './types';
@@ -6,9 +6,10 @@ import { TranscriptBuffer } from './TranscriptBuffer';
 import { WakeWordMatcher } from './WakeWordMatcher';
 import { SummaryScheduler } from './SummaryScheduler';
 import { QaHandoff } from './QaHandoff';
+import { AudioRouter } from './AudioRouter';
 import { MinutesRenderer } from './MinutesRenderer';
 
-type EventName = 'transcript' | 'summary' | 'qa' | 'orbState' | 'error';
+type EventName = 'transcript' | 'summary' | 'qa' | 'orbState' | 'error' | 'statusChange';
 type Handler = (payload: unknown) => void;
 
 export interface MeetingSessionConfig {
@@ -22,6 +23,7 @@ export interface MeetingSessionDeps {
   llm: LlmClient;
   persistence: Persistence;
   clock: Clock;
+  mic: MicCaptureHandle;
   config: MeetingSessionConfig;
 }
 
@@ -37,8 +39,18 @@ export class MeetingSession {
   private qa: QaHandoff | null = null;
   private asrUnsub: Array<() => void> = [];
   private running = false;
+  private router: AudioRouter;
 
-  constructor(private deps: MeetingSessionDeps) {}
+  constructor(private deps: MeetingSessionDeps) {
+    this.router = new AudioRouter({
+      asr: (c) => deps.asr.sendAudio(c),
+      e2e: (c) => deps.e2e.sendAudio(c),
+    });
+  }
+
+  getRouter(): AudioRouter {
+    return this.router;
+  }
 
   on(event: EventName, cb: Handler) {
     if (!this.listeners.has(event)) this.listeners.set(event, new Set());
@@ -73,6 +85,9 @@ export class MeetingSession {
     this.asrUnsub.push(this.deps.asr.on('final', (u) => this.handleUtterance(u as Utterance)));
     this.asrUnsub.push(this.deps.asr.on('partial', (u) => this.buffer.append(u as Utterance)));
 
+    this.deps.mic.on('chunk', (c) => this.router.feed(c));
+    this.deps.mic.on('rms', (r) => this.emit('orbState', { amplitude: r }));
+
     this.matcher = new WakeWordMatcher(this.deps.config.wakeWord, () => {
       void this.triggerQa();
     });
@@ -103,6 +118,7 @@ export class MeetingSession {
       onTranscriptBridge: (u) => void this.persistUtterance(u),
     });
 
+    await this.deps.mic.start();
     await this.deps.asr.start({ lang: this.deps.config.lang, enableSpeakerId: true });
     this.scheduler.start();
   }
@@ -130,6 +146,7 @@ export class MeetingSession {
     this.scheduler?.stop();
     for (const unsub of this.asrUnsub) unsub();
     this.asrUnsub = [];
+    await this.deps.mic.stop();
     await this.deps.asr.stop();
     const endedAt = this.deps.clock.now();
     const duration = Math.floor((endedAt - this.meta.started_at) / 1000);

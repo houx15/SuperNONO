@@ -3,6 +3,7 @@ import { MeetingSession } from '../MeetingSession';
 import { FakeAsrClient } from '../__fakes__/FakeAsrClient';
 import { FakeE2eClient } from '../__fakes__/FakeE2eClient';
 import { FakeLlmClient } from '../__fakes__/FakeLlmClient';
+import { FakeMicCapture } from '../__fakes__/FakeMicCapture';
 import { InMemoryPersistence } from '../__fakes__/InMemoryPersistence';
 import { FakeClock } from '../__fakes__/FakeClock';
 import { DEFAULT_WAKE_WORD } from '../config';
@@ -31,12 +32,14 @@ describe('integration: scripted 15-min meeting', () => {
     ]);
     const persistence = new InMemoryPersistence();
     const clock = new FakeClock(1_700_000_000_000);
+    const mic = new FakeMicCapture();
     const session = new MeetingSession({
       asr,
       e2e,
       llm,
       persistence,
       clock,
+      mic,
       config: { wakeWord: DEFAULT_WAKE_WORD, lang: 'zh' },
     });
 
