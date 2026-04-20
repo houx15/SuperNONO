@@ -4,8 +4,19 @@ import type { Utterance, AsrError, TestResult } from '../types';
 export class FakeAsrClient implements AsrClient {
   public sentChunks: Uint8Array[] = [];
   private listeners = new Map<string, Set<(p: unknown) => void>>();
+  private startFailuresRemaining = 0;
 
-  async start(_opts: AsrOpts): Promise<void> {}
+  /** Make the next n calls to start() reject with a network error. */
+  failNextNStarts(n: number): void {
+    this.startFailuresRemaining = n;
+  }
+
+  async start(_opts: AsrOpts): Promise<void> {
+    if (this.startFailuresRemaining > 0) {
+      this.startFailuresRemaining--;
+      throw new Error('simulated start failure');
+    }
+  }
   async stop(): Promise<void> {}
 
   sendAudio(chunk: Uint8Array): void {

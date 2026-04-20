@@ -28,6 +28,7 @@ import { fsAdapter } from './adapters/FsAdapter';
 import { DevTweaks } from './ui/DevTweaks';
 import { FakeE2eClient } from './logic/__fakes__/FakeE2eClient';
 import { FakeLlmClient } from './logic/__fakes__/FakeLlmClient';
+import { FakeMicCapture } from './logic/__fakes__/FakeMicCapture';
 import { loadAsrFixture, loadDoubaoRules } from './logic/fixtures';
 import type { FullMeeting } from './logic/types';
 
@@ -124,11 +125,14 @@ export default function App() {
   const asr = fixtureMode?.asr ?? realAsr;
   const e2e = fixtureMode?.e2e ?? realE2e;
   const llm = fixtureMode?.llm ?? realLlm;
+  // TODO(M2): replace FakeMicCapture with real MicCapture once audio wiring lands
+  const mic = useMemo(() => new FakeMicCapture(), []);
 
   const session = useMeetingSession({
     asr,
     e2e,
     llm,
+    mic,
     persistence: fsAdapter,
     wakeWord: settings.wakeWord,
     lang: 'zh',

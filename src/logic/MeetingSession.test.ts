@@ -111,4 +111,61 @@ describe('MeetingSession', () => {
     mic.scriptRms(0.7);
     expect(levels).toEqual([0.3, 0.7]);
   });
+
+  it('retryable error triggers reconnecting status then listening', async () => {
+    const { session, asr, clock } = makeSession();
+    const statuses: string[] = [];
+    session.on('statusChange', (s) => statuses.push(s as string));
+    await session.start('Meeting');
+    expect(statuses).toContain('listening');
+    asr.emitError({ kind: 'network', message: 'drop', retryable: true });
+    await Promise.resolve();
+    expect(statuses).toContain('reconnecting');
+    // advance backoff 1s
+    clock.advance(1000);
+    await Promise.resolve();
+    expect(statuses).toContain('listening');
+  });
+
+  it('three retryable errors in a row → paused', async () => {
+    const { session, asr, clock } = makeSession();
+    const statuses: string[] = [];
+    session.on('statusChange', (s) => statuses.push(s as string));
+    await session.start('Meeting');
+    // Make all reconnect start() calls fail so attempt counter is never reset
+    asr.failNextNStarts(3);
+    // First error: attempt=0, schedules 1000ms backoff
+    asr.emitError({ kind: 'network', message: 'x', retryable: true });
+    await flush(); // → 'reconnecting'
+    clock.advance(1010);
+    await flush(); // tryReconnect fires, asr.start() throws → tryReconnect(attempt=1)
+    // Second backoff: 3000ms
+    clock.advance(3010);
+    await flush(); // tryReconnect fires, asr.start() throws → tryReconnect(attempt=2)
+    // Third backoff: 9000ms
+    clock.advance(9010);
+    await flush(); // tryReconnect fires, asr.start() throws → attempt=3 → paused
+    expect(statuses[statuses.length - 1]).toBe('paused');
+  });
+
+  it('non-retryable error → paused immediately', async () => {
+    const { session, asr } = makeSession();
+    const statuses: string[] = [];
+    session.on('statusChange', (s) => statuses.push(s as string));
+    await session.start('Meeting');
+    asr.emitError({ kind: 'auth', message: 'bad key', retryable: false });
+    await Promise.resolve();
+    expect(statuses[statuses.length - 1]).toBe('paused');
+  });
+
+  it('resume from paused re-triggers connect', async () => {
+    const { session, asr } = makeSession();
+    const statuses: string[] = [];
+    session.on('statusChange', (s) => statuses.push(s as string));
+    await session.start('Meeting');
+    asr.emitError({ kind: 'auth', message: 'x', retryable: false });
+    await Promise.resolve();
+    await session.resume();
+    expect(statuses[statuses.length - 1]).toBe('listening');
+  });
 });

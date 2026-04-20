@@ -2,13 +2,20 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { MeetingSession } from '../logic/MeetingSession';
 import { RealClock } from '../logic/clock';
 import type { AiExchange, OrbState, Summary, Utterance } from '../logic/types';
-import type { AsrClient, E2eClient, LlmClient, Persistence } from '../logic/adapters';
+import type {
+  AsrClient,
+  E2eClient,
+  LlmClient,
+  MicCaptureHandle,
+  Persistence,
+} from '../logic/adapters';
 
 export interface UseMeetingSessionDeps {
   asr: AsrClient;
   e2e: E2eClient;
   llm: LlmClient;
   persistence: Persistence;
+  mic: MicCaptureHandle;
   wakeWord: string;
   lang: 'zh' | 'en';
 }
@@ -31,6 +38,7 @@ export function useMeetingSession(deps: UseMeetingSessionDeps) {
         e2e: deps.e2e,
         llm: deps.llm,
         persistence: deps.persistence,
+        mic: deps.mic,
         clock: new RealClock(),
         config: { wakeWord: deps.wakeWord, lang: deps.lang },
       });
@@ -47,7 +55,7 @@ export function useMeetingSession(deps: UseMeetingSessionDeps) {
       setMeetingId(session.id);
       setElapsedSec(0);
     },
-    [deps.asr, deps.e2e, deps.llm, deps.persistence, deps.wakeWord, deps.lang],
+    [deps.asr, deps.e2e, deps.llm, deps.persistence, deps.mic, deps.wakeWord, deps.lang],
   );
 
   const stop = useCallback(async () => {

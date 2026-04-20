@@ -1,6 +1,6 @@
 import type { AsrClient, E2eClient, LlmClient, MicCaptureHandle, Persistence } from './adapters';
 import type { Clock } from './clock';
-import type { AiExchange, MeetingMeta, OrbState, Summary, Utterance } from './types';
+import type { AiExchange, AsrError, MeetingMeta, OrbState, Summary, Utterance } from './types';
 import { SCHEMA_VERSION, makeMeetingId } from './types';
 import { TranscriptBuffer } from './TranscriptBuffer';
 import { WakeWordMatcher } from './WakeWordMatcher';
@@ -40,6 +40,9 @@ export class MeetingSession {
   private asrUnsub: Array<() => void> = [];
   private running = false;
   private router: AudioRouter;
+  private status: 'idle' | 'listening' | 'reconnecting' | 'paused' | 'ended' = 'idle';
+  private reconnectAttempt = 0;
+  private readonly BACKOFF_MS = [1000, 3000, 9000];
 
   constructor(private deps: MeetingSessionDeps) {
     this.router = new AudioRouter({
@@ -84,6 +87,7 @@ export class MeetingSession {
 
     this.asrUnsub.push(this.deps.asr.on('final', (u) => this.handleUtterance(u as Utterance)));
     this.asrUnsub.push(this.deps.asr.on('partial', (u) => this.buffer.append(u as Utterance)));
+    this.asrUnsub.push(this.deps.asr.on('error', this.onAsrError));
 
     this.deps.mic.on('chunk', (c) => this.router.feed(c));
     this.deps.mic.on('rms', (r) => this.emit('orbState', { amplitude: r }));
@@ -121,6 +125,7 @@ export class MeetingSession {
 
     await this.deps.mic.start();
     await this.deps.asr.start({ lang: this.deps.config.lang, enableSpeakerId: true });
+    this.setStatus('listening');
     this.scheduler.start();
   }
 
@@ -139,6 +144,54 @@ export class MeetingSession {
   private async triggerQa() {
     if (!this.qa) return;
     await this.qa.trigger();
+  }
+
+  private setStatus(next: typeof this.status) {
+    if (this.status === next) return;
+    this.status = next;
+    this.emit('statusChange', next);
+  }
+
+  private onAsrError = (e: AsrError) => {
+    if (!e.retryable) {
+      this.setStatus('paused');
+      this.emit('error', e);
+      return;
+    }
+    this.tryReconnect();
+  };
+
+  private tryReconnect() {
+    if (this.reconnectAttempt >= this.BACKOFF_MS.length) {
+      this.setStatus('paused');
+      this.reconnectAttempt = 0;
+      return;
+    }
+    this.setStatus('reconnecting');
+    const wait = this.BACKOFF_MS[this.reconnectAttempt];
+    this.reconnectAttempt++;
+    this.deps.clock.setTimeout(async () => {
+      try {
+        await this.deps.asr.stop();
+        await this.deps.asr.start({ lang: this.deps.config.lang, enableSpeakerId: true });
+        this.setStatus('listening');
+        this.reconnectAttempt = 0;
+      } catch {
+        this.tryReconnect();
+      }
+    }, wait);
+  }
+
+  async resume(): Promise<void> {
+    if (this.status !== 'paused') return;
+    this.reconnectAttempt = 0;
+    this.setStatus('reconnecting');
+    try {
+      await this.deps.asr.start({ lang: this.deps.config.lang, enableSpeakerId: true });
+      this.setStatus('listening');
+    } catch {
+      this.setStatus('paused');
+    }
   }
 
   async stop(): Promise<void> {
