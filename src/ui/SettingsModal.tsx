@@ -1,5 +1,7 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { openUrl } from '@tauri-apps/plugin-opener';
+import { invoke } from '@tauri-apps/api/core';
+import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { Icon } from './Icon';
 import type { TestResult } from '../logic/types';
 import type { LlmConfig } from '../logic/adapters';
@@ -52,12 +54,116 @@ function findPreset(id: string): LlmProviderPreset | undefined {
   return LLM_PROVIDERS.find((p) => p.id === id);
 }
 
+const MIC_TEST_SECONDS = 4;
+const SILENCE_THRESHOLD = 0.005;
+
 export function SettingsModal(p: SettingsModalProps) {
   const { settings, setSettings } = p;
   const [volcanoState, setVolcanoState] = useState<TestState>('idle');
   const [volcanoReason, setVolcanoReason] = useState<string | null>(null);
   const [llmState, setLlmState] = useState<TestState>('idle');
   const [llmReason, setLlmReason] = useState<string | null>(null);
+
+  // --- Mic test state -----------------------------------------------------
+  type MicPhase =
+    | { kind: 'idle' }
+    | { kind: 'running'; secondsLeft: number; peak: number; current: number }
+    | { kind: 'done'; peak: number; heard: boolean }
+    | { kind: 'error'; message: string };
+  const [micPhase, setMicPhase] = useState<MicPhase>({ kind: 'idle' });
+  const micTimerRef = useRef<number | null>(null);
+  const micUnlistenRef = useRef<UnlistenFn | null>(null);
+  const micErrorUnlistenRef = useRef<UnlistenFn | null>(null);
+
+  const stopMicTest = async () => {
+    if (micTimerRef.current !== null) {
+      window.clearInterval(micTimerRef.current);
+      micTimerRef.current = null;
+    }
+    if (micUnlistenRef.current) {
+      micUnlistenRef.current();
+      micUnlistenRef.current = null;
+    }
+    if (micErrorUnlistenRef.current) {
+      micErrorUnlistenRef.current();
+      micErrorUnlistenRef.current = null;
+    }
+    try {
+      await invoke('mic_stop');
+    } catch {
+      /* best effort */
+    }
+  };
+
+  const runMicTest = async () => {
+    await stopMicTest();
+    let peak = 0;
+    setMicPhase({ kind: 'running', secondsLeft: MIC_TEST_SECONDS, peak: 0, current: 0 });
+    try {
+      micErrorUnlistenRef.current = await listen<string>('mic://error', (e) => {
+        void stopMicTest();
+        setMicPhase({ kind: 'error', message: e.payload });
+      });
+      micUnlistenRef.current = await listen<number>('mic://rms', (e) => {
+        const rms = e.payload;
+        if (rms > peak) peak = rms;
+        setMicPhase((prev) => (prev.kind === 'running' ? { ...prev, peak, current: rms } : prev));
+      });
+      await invoke('mic_start');
+      const startedAt = Date.now();
+      micTimerRef.current = window.setInterval(() => {
+        const elapsed = Math.floor((Date.now() - startedAt) / 1000);
+        const remaining = MIC_TEST_SECONDS - elapsed;
+        if (remaining <= 0) {
+          void stopMicTest();
+          setMicPhase({ kind: 'done', peak, heard: peak >= SILENCE_THRESHOLD });
+          return;
+        }
+        setMicPhase((prev) =>
+          prev.kind === 'running' ? { ...prev, secondsLeft: remaining } : prev,
+        );
+      }, 200);
+    } catch (e) {
+      await stopMicTest();
+      const msg = e instanceof Error ? e.message : String(e);
+      setMicPhase({ kind: 'error', message: msg });
+    }
+  };
+
+  // --- Speaker test -------------------------------------------------------
+  const [speakerPhase, setSpeakerPhase] = useState<'idle' | 'playing' | 'error'>('idle');
+  const [speakerError, setSpeakerError] = useState<string | null>(null);
+  const runSpeakerTest = () => {
+    setSpeakerError(null);
+    try {
+      // WebAudio output is supported in Tauri WKWebView; only mic input isn't.
+      const Ctx = (window as unknown as { AudioContext?: typeof AudioContext }).AudioContext;
+      if (!Ctx) throw new Error('AudioContext unavailable');
+      const ctx = new Ctx();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      gain.gain.value = 0.15;
+      osc.frequency.value = 440;
+      osc.connect(gain).connect(ctx.destination);
+      setSpeakerPhase('playing');
+      osc.start();
+      window.setTimeout(() => {
+        osc.stop();
+        ctx.close().catch(() => {});
+        setSpeakerPhase('idle');
+      }, 600);
+    } catch (e) {
+      setSpeakerPhase('error');
+      setSpeakerError(e instanceof Error ? e.message : String(e));
+    }
+  };
+
+  // Cleanup on unmount.
+  useEffect(() => {
+    return () => {
+      void stopMicTest();
+    };
+  }, []);
 
   const currentPreset = useMemo(() => findPreset(settings.llmProvider), [settings.llmProvider]);
 
@@ -161,6 +267,119 @@ export function SettingsModal(p: SettingsModalProps) {
               placeholder="例如：嘿 Nono"
             />
             <div className="hint">说出唤醒词后，会议中将触发语音问答。</div>
+          </div>
+
+          {/* === Hardware check === */}
+          <div
+            style={{
+              marginTop: 16,
+              paddingTop: 16,
+              borderTop: '1px solid var(--border)',
+            }}
+          >
+            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>硬件检测</div>
+            <div
+              className="hint"
+              style={{ fontFamily: 'var(--sans)', fontSize: 12, marginBottom: 10 }}
+            >
+              如果开会时转写一直没出现，先在这里确认麦克风和扬声器。
+            </div>
+
+            {/* Mic test row */}
+            <div className="form-row">
+              <label>麦克风 · Microphone</label>
+              <div className="select-row">
+                <button
+                  className="btn btn-ghost"
+                  style={{ height: 32 }}
+                  onClick={() => {
+                    if (micPhase.kind === 'running')
+                      void stopMicTest().then(() => setMicPhase({ kind: 'idle' }));
+                    else void runMicTest();
+                  }}
+                >
+                  {micPhase.kind === 'running'
+                    ? `测试中… ${micPhase.secondsLeft}s`
+                    : '开始测试 · 对麦克风说话'}
+                </button>
+                {/* live level bar */}
+                <div
+                  style={{
+                    flex: 1,
+                    height: 10,
+                    borderRadius: 5,
+                    background: 'var(--bg-subtle)',
+                    border: '1px solid var(--border)',
+                    overflow: 'hidden',
+                    position: 'relative',
+                  }}
+                  aria-label="麦克风音量"
+                >
+                  <div
+                    style={{
+                      position: 'absolute',
+                      left: 0,
+                      top: 0,
+                      bottom: 0,
+                      width: `${Math.min(
+                        100,
+                        Math.round(
+                          ((micPhase.kind === 'running' ? micPhase.current : 0) || 0) * 500,
+                        ),
+                      )}%`,
+                      background:
+                        (micPhase.kind === 'running' && micPhase.current >= SILENCE_THRESHOLD) ||
+                        (micPhase.kind === 'done' && micPhase.heard)
+                          ? 'var(--accent)'
+                          : 'var(--fg-dim)',
+                      transition: 'width 60ms linear',
+                    }}
+                  />
+                </div>
+              </div>
+              {micPhase.kind === 'done' && (
+                <div
+                  className="hint"
+                  style={{
+                    color: micPhase.heard ? 'var(--accent)' : 'var(--warning)',
+                    fontSize: 12,
+                  }}
+                >
+                  {micPhase.heard
+                    ? `✓ 检测到音频（峰值 ${Math.round(micPhase.peak * 100)}%）`
+                    : '✗ 未检测到声音。请检查系统设置 → 隐私与安全性 → 麦克风是否允许 SuperNono。'}
+                </div>
+              )}
+              {micPhase.kind === 'error' && (
+                <div className="hint" style={{ color: 'var(--warning)', fontSize: 12 }}>
+                  ✗ {micPhase.message}
+                </div>
+              )}
+              {micPhase.kind === 'idle' && (
+                <div className="hint">点击后对着麦克风说几秒，成功会看到绿色音量条跳动。</div>
+              )}
+            </div>
+
+            {/* Speaker test row */}
+            <div className="form-row">
+              <label>扬声器 · Speaker</label>
+              <div className="select-row">
+                <button
+                  className="btn btn-ghost"
+                  style={{ height: 32 }}
+                  onClick={runSpeakerTest}
+                  disabled={speakerPhase === 'playing'}
+                >
+                  {speakerPhase === 'playing' ? '播放中…' : '播放 440Hz 测试音'}
+                </button>
+              </div>
+              {speakerPhase === 'error' && speakerError && (
+                <div className="hint" style={{ color: 'var(--warning)', fontSize: 12 }}>
+                  ✗ {speakerError}
+                </div>
+              )}
+              <div className="hint">能听到 0.6 秒的 &ldquo;嘟&rdquo; 一声即正常。</div>
+            </div>
           </div>
 
           {/* === Voice section === */}
