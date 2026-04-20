@@ -1,31 +1,33 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { FakeAsrClient } from './FakeAsrClient';
-import type { Utterance } from '../types';
+import type { AsrError } from '../types';
 
 describe('FakeAsrClient', () => {
-  it('fires subscribed final events in order', async () => {
-    const asr = new FakeAsrClient();
+  it('records sendAudio chunks for inspection', () => {
+    const c = new FakeAsrClient();
+    const a = new Uint8Array([1, 2, 3]);
+    c.sendAudio(a);
+    c.sendAudio(new Uint8Array([4]));
+    expect(c.sentChunks.length).toBe(2);
+    expect(c.sentChunks[0]).toEqual(a);
+  });
+
+  it('emits typed error with retryable flag', async () => {
+    const c = new FakeAsrClient();
+    await c.start({ lang: 'zh', enableSpeakerId: false });
+    const spy = vi.fn();
+    c.on('error', spy);
+    const err: AsrError = { kind: 'network', message: 'drop', retryable: true };
+    c.emitError(err);
+    expect(spy).toHaveBeenCalledWith(err);
+  });
+
+  it('emits scripted finals', async () => {
+    const c = new FakeAsrClient();
+    await c.start({ lang: 'zh', enableSpeakerId: false });
     const seen: string[] = [];
-    asr.on('final', (u) => seen.push((u as Utterance).text));
-    await asr.start({ lang: 'zh', enableSpeakerId: true });
-    asr.emitFinal(1000, 'S1', 'hello');
-    asr.emitFinal(2000, 'S2', 'world');
-    expect(seen).toEqual(['hello', 'world']);
-  });
-
-  it('only fires events after start()', async () => {
-    const asr = new FakeAsrClient();
-    const seen: unknown[] = [];
-    asr.on('final', (u) => seen.push(u));
-    asr.emitFinal(1, 'S1', 'dropped');
-    expect(seen).toEqual([]);
-    await asr.start({ lang: 'zh', enableSpeakerId: true });
-    asr.emitFinal(2, 'S1', 'kept');
-    expect(seen.length).toBe(1);
-  });
-
-  it('testCredentials returns ok by default', async () => {
-    const asr = new FakeAsrClient();
-    expect(await asr.testCredentials('id', 'key')).toEqual({ ok: true });
+    c.on('final', (u) => seen.push(u.text));
+    c.scriptFinal({ text: 'hi', startMs: 0, endMs: 100, isFinal: true });
+    expect(seen).toEqual(['hi']);
   });
 });

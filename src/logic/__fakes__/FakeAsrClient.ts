@@ -1,48 +1,49 @@
 import type { AsrClient, AsrOpts, Unsubscribe } from '../adapters';
-import type { Utterance, TestResult } from '../types';
-
-type EventName = 'partial' | 'final' | 'error' | 'closed';
-type Listener = (payload: Utterance | Error) => void;
+import type { Utterance, AsrError, TestResult } from '../types';
 
 export class FakeAsrClient implements AsrClient {
+  public sentChunks: Uint8Array[] = [];
   private started = false;
-  private listeners: Map<EventName, Set<Listener>> = new Map();
-  public testResult: TestResult = { ok: true };
+  private listeners = new Map<string, Set<(p: unknown) => void>>();
 
   async start(_opts: AsrOpts): Promise<void> {
     this.started = true;
   }
-
   async stop(): Promise<void> {
     this.started = false;
-    this.emit('closed', new Error('stopped'));
   }
 
-  on(event: EventName, cb: Listener): Unsubscribe {
+  sendAudio(chunk: Uint8Array): void {
+    this.sentChunks.push(chunk);
+  }
+
+  on(event: 'partial' | 'final' | 'error' | 'closed', cb: (p: never) => void): Unsubscribe {
     if (!this.listeners.has(event)) this.listeners.set(event, new Set());
-    this.listeners.get(event)!.add(cb);
-    return () => this.listeners.get(event)?.delete(cb);
+    const set = this.listeners.get(event)!;
+    set.add(cb as (p: unknown) => void);
+    return () => {
+      set.delete(cb as (p: unknown) => void);
+    };
   }
 
   async testCredentials(_appId: string, _accessKey: string): Promise<TestResult> {
-    return this.testResult;
+    return { ok: true };
   }
 
-  emitFinal(t: number, speaker: string, text: string) {
-    if (!this.started) return;
-    this.emit('final', { t, speaker, text, final: true });
+  scriptPartial(u: Utterance): void {
+    this.emit('partial', u);
   }
-
-  emitPartial(t: number, speaker: string, text: string) {
-    if (!this.started) return;
-    this.emit('partial', { t, speaker, text, final: false });
+  scriptFinal(u: Utterance): void {
+    this.emit('final', u);
   }
-
-  emitError(e: Error) {
+  emitError(e: AsrError): void {
     this.emit('error', e);
   }
+  emitClosed(): void {
+    this.emit('closed', undefined);
+  }
 
-  private emit(event: EventName, payload: Utterance | Error) {
+  private emit(event: string, payload: unknown) {
     for (const cb of this.listeners.get(event) ?? []) cb(payload);
   }
 }
