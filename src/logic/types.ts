@@ -58,3 +58,14 @@ export function makeMeetingId(): string {
     .join('');
   return `mtg_${hex}`;
 }
+
+export type AsrErrorKind = 'auth' | 'network' | 'rate_limit' | 'server' | 'protocol';
+
+export interface AsrError {
+  kind: AsrErrorKind;
+  message: string;
+  retryable: boolean;
+}
+
+export type E2eErrorKind = AsrErrorKind;
+export type E2eError = AsrError;

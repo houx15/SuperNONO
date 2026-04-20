@@ -1,4 +1,13 @@
-import type { Utterance, Summary, MeetingMeta, AiExchange, FullMeeting, TestResult } from './types';
+import type {
+  Utterance,
+  Summary,
+  MeetingMeta,
+  AiExchange,
+  FullMeeting,
+  TestResult,
+  AsrError,
+  E2eError,
+} from './types';
 
 export type Unsubscribe = () => void;
 
@@ -9,11 +18,12 @@ export interface AsrOpts {
 
 export interface AsrClient {
   start(opts: AsrOpts): Promise<void>;
+  sendAudio(chunk: Uint8Array): void;
   stop(): Promise<void>;
-  on(
-    event: 'partial' | 'final' | 'error' | 'closed',
-    cb: (payload: Utterance | Error) => void,
-  ): Unsubscribe;
+  on(event: 'partial', cb: (u: Utterance) => void): Unsubscribe;
+  on(event: 'final', cb: (u: Utterance) => void): Unsubscribe;
+  on(event: 'error', cb: (e: AsrError) => void): Unsubscribe;
+  on(event: 'closed', cb: () => void): Unsubscribe;
   testCredentials(appId: string, accessKey: string): Promise<TestResult>;
 }
 
@@ -25,12 +35,13 @@ export interface E2eOpen {
 export interface E2eClient {
   open(opts: E2eOpen): Promise<void>;
   sendAudio(chunk: Uint8Array): void;
-  on(
-    event: 'question_transcript' | 'answer_transcript' | 'audio' | 'turn_end' | 'error',
-    cb: (payload: unknown) => void,
-  ): Unsubscribe;
+  on(event: 'question_transcript', cb: (p: { text: string }) => void): Unsubscribe;
+  on(event: 'answer_transcript', cb: (p: { text: string }) => void): Unsubscribe;
+  on(event: 'audio', cb: (p: Uint8Array) => void): Unsubscribe;
+  on(event: 'turn_end', cb: () => void): Unsubscribe;
+  on(event: 'error', cb: (e: E2eError) => void): Unsubscribe;
   close(): Promise<void>;
-  testCredentials(apiKey: string): Promise<TestResult>;
+  testCredentials(appId: string, accessKey: string): Promise<TestResult>;
 }
 
 export interface LlmReq {
@@ -59,4 +70,12 @@ export interface Persistence {
   listMeetings(): Promise<MeetingMeta[]>;
   readMeeting(mtgId: string): Promise<FullMeeting>;
   exportMinutes(mtgId: string, destPath: string): Promise<void>;
+}
+
+export interface MicCaptureHandle {
+  start(): Promise<void>;
+  stop(): Promise<void>;
+  on(event: 'chunk', cb: (chunk: Uint8Array) => void): Unsubscribe;
+  on(event: 'rms', cb: (rms: number) => void): Unsubscribe;
+  on(event: 'error', cb: (err: Error) => void): Unsubscribe;
 }
