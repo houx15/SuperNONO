@@ -44,6 +44,13 @@ export class MeetingSession {
   private status: 'idle' | 'listening' | 'reconnecting' | 'paused' | 'ended' = 'idle';
   private reconnectAttempt = 0;
   private readonly BACKOFF_MS = [1000, 3000, 9000];
+  /** True while we are intentionally tearing the ASR WS down (either
+   *  during reconnect or meeting stop). Incoming 'closed' events are
+   *  ignored in this window so our own stop() doesn't re-trigger the
+   *  reconnect state machine and cause an infinite stop → closed →
+   *  reconnect → stop loop the user reported as "always
+   *  reconnecting." */
+  private suppressClose = false;
 
   constructor(private deps: MeetingSessionDeps) {
     this.router = new AudioRouter({
@@ -120,6 +127,7 @@ export class MeetingSession {
     // machine kicks in.
     this.asrUnsub.push(
       this.deps.asr.on('closed', () => {
+        if (this.suppressClose) return;
         this.onAsrError({ kind: 'network', message: 'ASR connection closed', retryable: true });
       }),
     );
@@ -228,6 +236,7 @@ export class MeetingSession {
     const wait = this.BACKOFF_MS[this.reconnectAttempt];
     this.reconnectAttempt++;
     this.deps.clock.setTimeout(async () => {
+      this.suppressClose = true;
       try {
         await this.deps.asr.stop();
         await this.deps.asr.start({ lang: this.deps.config.lang, enableSpeakerId: true });
@@ -235,6 +244,8 @@ export class MeetingSession {
         this.reconnectAttempt = 0;
       } catch {
         this.tryReconnect();
+      } finally {
+        this.suppressClose = false;
       }
     }, wait);
   }
