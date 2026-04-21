@@ -9,7 +9,7 @@ describe('FakeE2eClient', () => {
     (['question_transcript', 'answer_transcript', 'audio', 'turn_end', 'error'] as const).forEach(
       (e) => c.on(e, (p) => events.push([e, p])),
     );
-    await c.open({ systemPrompt: 'x', voice: 'vv' });
+    await c.open({ systemPrompt: 'x', voice: 'vv', dialogId: '' });
     c.scriptTurn({
       question: '价格多少?',
       answer: '新加坡市场落在 12-28 美元',
@@ -26,7 +26,7 @@ describe('FakeE2eClient', () => {
 
 it('emits typed error', async () => {
   const c = new FakeE2eClient();
-  await c.open({ systemPrompt: 'p', voice: 'v' });
+  await c.open({ systemPrompt: 'p', voice: 'v', dialogId: '' });
   const seen: E2eError[] = [];
   c.on('error', (e) => seen.push(e as E2eError));
   const err: E2eError = { kind: 'server', message: 'boom', retryable: true };

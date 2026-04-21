@@ -63,10 +63,15 @@ export class WakeWordMatcher {
 }
 
 export function normalize(s: string): string {
-  return s
-    .toLowerCase()
-    .replace(/[\s,.!?;:，。！？；：、]/g, '')
-    .trim();
+  // Strip anything that isn't a letter or digit (Unicode-aware). The
+  // earlier whitelist only knew about a handful of ASCII + CJK
+  // punctuation and missed middle-dots, non-breaking spaces, and
+  // zero-width characters that ASR occasionally inserts between
+  // syllables. One user-reported consequence: "嘿，诺诺" with a
+  // fullwidth comma plus an invisible U+200B between "诺诺" wouldn't
+  // normalize cleanly. Using \p{L} + \p{N} covers all punctuation and
+  // whitespace categories in one rule.
+  return s.toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
 }
 
 /**

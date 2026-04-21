@@ -131,4 +131,18 @@ describe('WakeWordMatcher', () => {
     expect(normalize('嘿， Nono！ ')).toBe('嘿nono');
     expect(normalize('Hey, Nono?')).toBe('heynono');
   });
+
+  it('normalize also strips exotic whitespace + punctuation ASR occasionally inserts', () => {
+    // Zero-width space, non-breaking space, middle dot, Chinese comma —
+    // all must vanish so the needle can still match.
+    expect(normalize('嘿\u200B，\u00A0诺·诺')).toBe('嘿诺诺');
+    expect(normalize('嘿，诺诺')).toBe('嘿诺诺');
+  });
+
+  it('fires on "嘿，诺诺" with a fullwidth comma (exact user report)', () => {
+    const hit = vi.fn();
+    const m = new WakeWordMatcher('嘿 Nono', hit);
+    m.observe(u('嘿，诺诺，能不能帮我查一下'));
+    expect(hit).toHaveBeenCalledTimes(1);
+  });
 });

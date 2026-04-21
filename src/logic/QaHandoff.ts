@@ -33,6 +33,10 @@ export interface QaHandoffDeps {
    *  out. Used to hold the router in 'drop' past turn_end so the speaker
    *  tail doesn't loop back into the mic. */
   audioPlayerDrainMs?: () => number;
+  /** Stable conversation id. Volcano uses this on StartSession to
+   *  reload the last ~20 QA rounds, so Nono remembers prior wake-word
+   *  interactions within the same meeting. We pass the meeting id. */
+  dialogId?: string;
 }
 
 /** Absolute ceiling on the whole Q&A session (all turns). If neither
@@ -202,10 +206,12 @@ export class QaHandoff {
     // single session: we just keep the connection open between turns
     // and the server handles detecting each new user query.
     let openFailed = false;
-    await e2e.open({ systemPrompt, voice: E2E_DEFAULT_VOICE }).catch(() => {
-      openFailed = true;
-      finishTurn('error');
-    });
+    await e2e
+      .open({ systemPrompt, voice: E2E_DEFAULT_VOICE, dialogId: this.deps.dialogId ?? '' })
+      .catch(() => {
+        openFailed = true;
+        finishTurn('error');
+      });
 
     let exitReason: EndReason = 'silence';
 

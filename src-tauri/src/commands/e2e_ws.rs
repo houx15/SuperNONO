@@ -4,6 +4,13 @@ use serde::{Deserialize, Serialize};
 pub struct E2eOpenOpts {
     pub system_prompt: String,
     pub voice: String,
+    /// Stable identifier for the conversation across StartSession
+    /// calls. Volcano reloads up to the last 20 QA pairs when a new
+    /// session reuses the same dialog_id, giving Nono memory across
+    /// wake-word events within the same meeting. Defaults to empty
+    /// (no cross-session memory) if the TS side omits it.
+    #[serde(default)]
+    pub dialog_id: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -51,11 +58,21 @@ pub mod frame {
         write_event_frame(0b0001, 0b0001, 1, None, b"{}")
     }
 
-    pub fn encode_start_session(session_id: &str, system_prompt: &str, voice: &str) -> Vec<u8> {
+    pub fn encode_start_session(
+        session_id: &str,
+        system_prompt: &str,
+        voice: &str,
+        dialog_id: &str,
+    ) -> Vec<u8> {
         // Request pcm_s16le explicitly. The "pcm" format returns 32-bit float
         // which is more ambiguous across providers; s16le is the most portable
         // and decodes to clean audio with a simple int16→float conversion on
         // the browser side.
+        //
+        // dialog_id gets passed through when non-empty so Volcano loads the
+        // prior QA history (up to 20 rounds) for this conversation —
+        // otherwise Nono has no memory of earlier wake-word events in the
+        // same meeting.
         let payload = json!({
             "tts": {
                 "speaker": voice,
@@ -64,6 +81,7 @@ pub mod frame {
             "dialog": {
                 "bot_name": "Nono",
                 "system_role": system_prompt,
+                "dialog_id": dialog_id,
                 "extra": { "input_mod": "audio", "model": "1.2.1.1" }
             }
         });
@@ -197,7 +215,7 @@ pub mod frame {
 
         #[test]
         fn encode_start_session_carries_session_id_and_payload() {
-            let bytes = encode_start_session("sess-1", "prompt", "vv");
+            let bytes = encode_start_session("sess-1", "prompt", "vv", "dlg-xyz");
             assert_eq!(bytes[0], 0x11);
             assert_eq!(bytes[1], 0x14); // event flag
                                         // event id = 100
@@ -218,6 +236,8 @@ pub mod frame {
             assert_eq!(parsed["tts"]["audio_config"]["format"], "pcm_s16le");
             assert_eq!(parsed["tts"]["audio_config"]["sample_rate"], 24000);
             assert_eq!(parsed["dialog"]["system_role"], "prompt");
+            assert_eq!(parsed["dialog"]["bot_name"], "Nono");
+            assert_eq!(parsed["dialog"]["dialog_id"], "dlg-xyz");
         }
 
         #[test]
@@ -376,7 +396,13 @@ pub async fn e2e_open(
         .await
         .map_err(|e| e.to_string())?;
     sink.send(Message::Binary(
-        encode_start_session(&session_id, &opts.system_prompt, &opts.voice).into(),
+        encode_start_session(
+            &session_id,
+            &opts.system_prompt,
+            &opts.voice,
+            &opts.dialog_id,
+        )
+        .into(),
     ))
     .await
     .map_err(|e| e.to_string())?;
@@ -586,10 +612,24 @@ mod ipc_contract_tests {
         let json = serde_json::json!({
             "system_prompt": "You are Nono, a meeting assistant.",
             "voice": "zh_female_vv_jupiter_bigtts",
+            "dialog_id": "mtg_abcd1234",
         });
         let parsed: E2eOpenOpts = serde_json::from_value(json)
             .expect("E2eOpenOpts must accept snake_case (system_prompt) from TS");
         assert_eq!(parsed.system_prompt, "You are Nono, a meeting assistant.");
         assert_eq!(parsed.voice, "zh_female_vv_jupiter_bigtts");
+        assert_eq!(parsed.dialog_id, "mtg_abcd1234");
+    }
+
+    #[test]
+    fn e2e_open_opts_accepts_missing_dialog_id_for_back_compat() {
+        // Older TS builds don't send dialog_id. The serde default lets
+        // those payloads still deserialize cleanly.
+        let json = serde_json::json!({
+            "system_prompt": "prompt",
+            "voice": "vv",
+        });
+        let parsed: E2eOpenOpts = serde_json::from_value(json).unwrap();
+        assert_eq!(parsed.dialog_id, "");
     }
 }

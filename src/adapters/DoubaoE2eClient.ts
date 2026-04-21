@@ -46,7 +46,11 @@ export class DoubaoE2eClient implements E2eClient {
       sessionId: this.sessionId,
       appId: this.appId,
       accessKey: this.accessKey,
-      opts: { system_prompt: opts.systemPrompt, voice: opts.voice },
+      opts: {
+        system_prompt: opts.systemPrompt,
+        voice: opts.voice,
+        dialog_id: opts.dialogId,
+      },
     });
   }
 

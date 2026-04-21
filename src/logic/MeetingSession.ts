@@ -157,6 +157,11 @@ export class MeetingSession {
       buffer: this.buffer,
       summaries: () => this.summaries,
       router: this.router,
+      // Pass the meeting id as the dialog id so Nono remembers prior
+      // Q&A rounds across multiple wake-word events in the same
+      // meeting. Volcano loads the last ~20 QA rounds from this
+      // dialog_id on each new StartSession.
+      dialogId: id,
       onOrbState: (s: OrbState) => this.emit('orbState', s),
       onExchange: (x) => {
         this.aiExchanges.push(x);

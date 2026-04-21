@@ -20,15 +20,15 @@ describe('DoubaoE2eClient IPC contract', () => {
 
   it('e2e_open payload has the exact shape Rust accepts', async () => {
     const c = new DoubaoE2eClient('mtg', 'my_app_id', 'my_access_token');
-    await c.open({ systemPrompt: 'be nice', voice: 'vv' });
+    await c.open({ systemPrompt: 'be nice', voice: 'vv', dialogId: 'mtg_abc' });
     expect(invokeMock).toHaveBeenCalledWith('e2e_open', {
       sessionId: 'mtg',
       appId: 'my_app_id',
       accessKey: 'my_access_token',
-      // NOTE: inside `opts`, keys are snake_case (system_prompt) —
-      // different from asr_start's camelCase params. Matching Rust
-      // contract test in e2e_ws.rs locks this in.
-      opts: { system_prompt: 'be nice', voice: 'vv' },
+      // NOTE: inside `opts`, keys are snake_case (system_prompt,
+      // dialog_id) — different from asr_start's camelCase params.
+      // Matching Rust contract test in e2e_ws.rs locks this in.
+      opts: { system_prompt: 'be nice', voice: 'vv', dialog_id: 'mtg_abc' },
     });
   });
 

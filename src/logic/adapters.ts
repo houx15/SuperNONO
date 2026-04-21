@@ -30,6 +30,11 @@ export interface AsrClient {
 export interface E2eOpen {
   systemPrompt: string;
   voice: string;
+  /** Stable per-meeting identifier. When reused across StartSession
+   *  calls, Volcano reloads up to the last 20 QA rounds so Nono
+   *  remembers prior wake-word interactions in the same meeting.
+   *  Empty string disables cross-session memory. */
+  dialogId: string;
 }
 
 export interface E2eClient {
