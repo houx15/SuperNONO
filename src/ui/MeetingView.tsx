@@ -11,6 +11,11 @@ export interface MeetingViewProps {
   summaries: Summary[];
   activeSummary: Summary | null;
   currentExchange: AiExchange | null;
+  /** Partial question + answer while a Q&A turn is active. Both
+   *  strings empty means no active turn (UI should hide the live
+   *  panel). The completed exchange still flows through
+   *  `currentExchange` after turn_end. */
+  liveQa: { question: string; answer: string };
   orbState: OrbState;
   orbSize: number;
   amplitude?: number | null;
@@ -64,15 +69,32 @@ export function MeetingView(p: MeetingViewProps) {
           {p.summaries.map((s, i) => (
             <SummaryCard key={i} s={s} />
           ))}
-          {p.currentExchange && (
+          {/* During a Q&A turn we render the LIVE panel instead of the
+              completed-exchange card — otherwise the user stares at a
+              silent orb for 5-10 s while Nono's answer streams in.
+              Once turn_end fires and the session exits, liveQa is
+              cleared and currentExchange shows the final pair. */}
+          {(p.liveQa.question || p.liveQa.answer || p.orbState !== 'idle') &&
+          p.orbState !== 'idle' ? (
             <AiBlock
-              question={p.currentExchange.question}
-              answer={p.currentExchange.answer}
-              cites={p.currentExchange.cites}
+              question={p.liveQa.question || '（倾听中…）'}
+              answer={p.liveQa.answer}
+              cites={null}
               speaking={p.orbState === 'speaking'}
-              thinking={p.orbState === 'thinking'}
-              timestampLabel={new Date(p.currentExchange.t).toTimeString().slice(0, 8)}
+              thinking={p.orbState === 'thinking' && !p.liveQa.answer}
+              timestampLabel="live"
             />
+          ) : (
+            p.currentExchange && (
+              <AiBlock
+                question={p.currentExchange.question}
+                answer={p.currentExchange.answer}
+                cites={p.currentExchange.cites}
+                speaking={false}
+                thinking={false}
+                timestampLabel={new Date(p.currentExchange.t).toTimeString().slice(0, 8)}
+              />
+            )
           )}
           {p.activeSummary && <SummaryCard s={p.activeSummary} />}
         </div>

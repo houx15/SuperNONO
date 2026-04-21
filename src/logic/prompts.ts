@@ -24,10 +24,28 @@ export interface PromptBundle {
 /*                           CHINESE (default)                         */
 /* ------------------------------------------------------------------ */
 
+/** Shared boilerplate that tells the LLM how to interpret the word
+ *  "Nono" in raw transcripts. Without this, summaries misread lines
+ *  like "嘿 Nono，查一下价格" as a meeting attendee literally saying
+ *  "no no" in English (user report: "有位会议者英文否定，说了nono,但
+ *  是没有解释原因"). The transcript may contain the wake phrase and
+ *  the question that followed because ASR captures everything; those
+ *  turns are directed to the AI assistant and MUST NOT be treated as
+ *  meeting content. */
+const NONO_CONTEXT_ZH =
+  '注意："Nono"（或 SuperNono、嘿 Nono、嗨 Nono、你好 Nono、喂 Nono）是本会议中 AI 助手的唤醒词，类似 "Hey Siri"。' +
+  '任何以这些短语开头或包含它们的句子都是对 AI 助手的提问，不属于会议内容——请在摘要、决策、待办中忽略这类句子。';
+const NONO_CONTEXT_EN =
+  'Note: "Nono" (also SuperNono, "hey Nono", "hi Nono") is the wake word for this meeting\'s AI ' +
+  'assistant, analogous to "Hey Siri". Any sentence starting with or containing these phrases is a ' +
+  'question directed AT the assistant, not meeting content. Exclude such sentences from summaries, ' +
+  'decisions, and action items.';
+
 const PROMPTS_ZH: PromptBundle = {
   buildSummaryPrompt(prev, recent) {
     return [
       '你是会议助手，正在为一段持续进行中的会议生成滚动摘要。',
+      NONO_CONTEXT_ZH,
       '基于下方的「上一段摘要」和「新增对话」，请以 **中文** 返回严格 JSON：',
       '{"topic": "本段主题 (≤15字)", "text": "2-4 句要点", "sameTopic": bool}',
       '若主题与上一段相同，则 sameTopic=true，调用方会把新内容并入旧摘要。',
@@ -41,6 +59,7 @@ const PROMPTS_ZH: PromptBundle = {
   buildMinutesExtractPrompt(summariesJoined, transcriptTail) {
     return [
       '你是会议纪要助手，请从以下会议内容中抽取「决策」和「待办事项」。',
+      NONO_CONTEXT_ZH,
       '请以 **中文** 返回严格 JSON：',
       '{"decisions": string[], "actions": [{"owner": string, "task": string, "tag": string}]}',
       '- decisions：本次会议达成的结论或决定（每条 ≤ 30 字）',
@@ -53,8 +72,9 @@ const PROMPTS_ZH: PromptBundle = {
     ].join('\n');
   },
   qaSystemPreamble:
-    '你是 SuperNono，一位参与本次会议的 AI 助手。请用 **中文** 简洁回答用户的问题，' +
-    '仅基于下方提供的会议上下文。如上下文中没有答案，请如实说明"会议中暂未提及"。',
+    '你的名字叫 Nono（也叫 SuperNono）——一位参与本次会议的 AI 助手。当用户喊"嘿 Nono"' +
+    '或直接叫你的名字，就是在和你说话。请用 **中文** 简洁回答，仅基于下方提供的会议上下文。' +
+    '如上下文中没有答案，请如实说明"会议中暂未提及"。',
 };
 
 /* ------------------------------------------------------------------ */
@@ -65,6 +85,7 @@ const PROMPTS_EN: PromptBundle = {
   buildSummaryPrompt(prev, recent) {
     return [
       'You are a meeting assistant summarising an ongoing segment.',
+      NONO_CONTEXT_EN,
       'Given the PREVIOUS segment summary and the NEW transcript, return strict JSON:',
       '{"topic": "topic ≤15 chars", "text": "2-4 sentences", "sameTopic": bool}',
       'If the topic is unchanged, set sameTopic=true; the caller may merge.',
@@ -78,6 +99,7 @@ const PROMPTS_EN: PromptBundle = {
   buildMinutesExtractPrompt(summariesJoined, transcriptTail) {
     return [
       'You are extracting meeting decisions and action items. Return strict JSON:',
+      NONO_CONTEXT_EN,
       '{"decisions": string[], "actions": [{"owner": string, "task": string, "tag": string}]}',
       '- decisions: ≤ 30-char conclusions reached in the meeting',
       '- actions: specific follow-ups. owner = assignee (use "TBD" if unclear), task = concrete action, tag = 1-2 word category',
@@ -89,9 +111,9 @@ const PROMPTS_EN: PromptBundle = {
     ].join('\n');
   },
   qaSystemPreamble:
-    'You are SuperNono, an AI participant in this live meeting. ' +
-    'Answer concisely, in the same language as the question, ' +
-    'based only on the discussion context below. If the context does not ' +
+    'Your name is Nono (also SuperNono) — an AI assistant joining this meeting. When a user says ' +
+    '"hey Nono" or calls you by name, they are talking to you. Answer concisely, in the same ' +
+    'language as the question, based only on the discussion context below. If the context does not ' +
     'contain the answer, say so plainly.',
 };
 

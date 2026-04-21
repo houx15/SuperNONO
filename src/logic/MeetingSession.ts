@@ -9,7 +9,7 @@ import { QaHandoff } from './QaHandoff';
 import { AudioRouter } from './AudioRouter';
 import { MinutesRenderer } from './MinutesRenderer';
 
-type EventName = 'transcript' | 'summary' | 'qa' | 'orbState' | 'error' | 'statusChange';
+type EventName = 'transcript' | 'summary' | 'qa' | 'qaLive' | 'orbState' | 'error' | 'statusChange';
 type Handler = (payload: unknown) => void;
 
 export interface MeetingSessionConfig {
@@ -166,6 +166,7 @@ export class MeetingSession {
       onTranscriptBridge: (u) => void this.persistUtterance(u),
       onAudioChunk: (c) => this.deps.audioPlayer?.enqueue(c),
       audioPlayerDrainMs: () => this.deps.audioPlayer?.msUntilIdle?.() ?? 0,
+      onLiveQa: (live) => this.emit('qaLive', live),
     });
 
     // Order matters: start ASR before the mic so a failed handshake doesn't

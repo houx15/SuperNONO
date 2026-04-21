@@ -28,6 +28,13 @@ export function useMeetingSession(deps: UseMeetingSessionDeps) {
   const [summaries, setSummaries] = useState<Summary[]>([]);
   const [activeSummary] = useState<Summary | null>(null);
   const [currentExchange, setCurrentExchange] = useState<AiExchange | null>(null);
+  /** Partial question / answer text while a Q&A turn is in progress.
+   *  Surfaces in the UI so the user can see what Nono heard and what
+   *  Nono is saying, instead of a silent orb. */
+  const [liveQa, setLiveQa] = useState<{ question: string; answer: string }>({
+    question: '',
+    answer: '',
+  });
   const [orbState, setOrbState] = useState<OrbState>('idle');
   const [liveText, setLiveText] = useState('');
   const [liveSpeaker, setLiveSpeaker] = useState<string | null>(null);
@@ -76,6 +83,7 @@ export function useMeetingSession(deps: UseMeetingSessionDeps) {
       });
       session.on('summary', (s) => setSummaries((prev) => [...prev, s as Summary]));
       session.on('qa', (x) => setCurrentExchange(x as AiExchange));
+      session.on('qaLive', (l) => setLiveQa(l as { question: string; answer: string }));
       session.on('orbState', (s) => {
         // orbState events carry either an OrbState string (from QaHandoff)
         // or { amplitude: number } (from mic rms). Handle both.
@@ -99,6 +107,7 @@ export function useMeetingSession(deps: UseMeetingSessionDeps) {
       setSummaries([]);
       setLiveText('');
       setLiveSpeaker(null);
+      setLiveQa({ question: '', answer: '' });
       await session.start(title);
       setMeetingId(session.id);
       setElapsedSec(0);
@@ -148,6 +157,7 @@ export function useMeetingSession(deps: UseMeetingSessionDeps) {
     summaries,
     activeSummary,
     currentExchange,
+    liveQa,
     orbState,
     liveText,
     liveSpeaker,

@@ -394,6 +394,7 @@ export default function App() {
             summaries={session.summaries}
             activeSummary={session.activeSummary}
             currentExchange={session.currentExchange}
+            liveQa={session.liveQa}
             orbState={session.orbState}
             orbSize={180}
             amplitude={session.amplitude}

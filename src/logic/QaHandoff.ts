@@ -6,6 +6,14 @@ import type { AudioRouter } from './AudioRouter';
 import { MAX_RAW_WINDOW_MIN_QA, E2E_DEFAULT_VOICE } from './config';
 import { activePrompts } from './prompts';
 
+/** Partial Q&A text as it streams in — the UI shows this so the user
+ *  can see the question Nono heard and the answer Nono is forming,
+ *  instead of staring at a silent orb while the turn plays out. */
+export interface QaLive {
+  question: string;
+  answer: string;
+}
+
 export interface QaHandoffDeps {
   asr: AsrClient;
   e2e: E2eClient;
@@ -17,6 +25,10 @@ export interface QaHandoffDeps {
   onExchange: (x: AiExchange) => void;
   onTranscriptBridge?: (u: Utterance) => void;
   onAudioChunk?: (c: Uint8Array) => void;
+  /** Fires on every question_transcript / answer_transcript update
+   *  during a Q&A turn. Also emitted when a turn completes and when
+   *  the session closes (with empty strings) so the UI can clear. */
+  onLiveQa?: (live: QaLive) => void;
   /** Returns ms remaining until already-scheduled TTS audio has played
    *  out. Used to hold the router in 'drop' past turn_end so the speaker
    *  tail doesn't loop back into the mic. */
@@ -142,6 +154,7 @@ export class QaHandoff {
     hook('question_transcript', (p) => {
       question = (p as { text: string }).text ?? '';
       this.deps.onOrbState('thinking');
+      this.deps.onLiveQa?.({ question, answer });
       markActivity();
     });
     hook('user_speaking', () => {
@@ -153,6 +166,7 @@ export class QaHandoff {
     });
     hook('answer_transcript', (p) => {
       answer = (p as { text: string }).text ?? '';
+      this.deps.onLiveQa?.({ question, answer });
     });
     hook('audio', (c) => {
       this.deps.onAudioChunk?.(c as Uint8Array);
@@ -295,6 +309,9 @@ export class QaHandoff {
 
     this.deps.router?.switchTo('asr');
     this.deps.onOrbState('idle');
+    // Clear the live Q&A panel so the next idle meeting view isn't
+    // frozen on the last question/answer from the previous session.
+    this.deps.onLiveQa?.({ question: '', answer: '' });
     this.active = false;
     void exitReason; // kept for future telemetry / diagnostics hook
   }
