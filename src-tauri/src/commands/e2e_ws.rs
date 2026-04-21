@@ -420,9 +420,21 @@ pub async fn e2e_open(
                             app_recv.emit("e2e://user_speaking", ()).ok();
                         }
                         451 => {
-                            // user transcript
+                            // ASRResponse. Per docs the payload shape is:
+                            //   { "results": [ {"text": "...", "is_interim": bool} ] }
+                            // (plural, array). The earlier code read
+                            // v["result"]["text"] (singular, direct) and
+                            // silently emitted an empty string for every
+                            // question — which is why Q&A transcripts
+                            // never showed up in the minutes. Accept the
+                            // documented shape first, with legacy
+                            // singular `result.text` as a fallback.
                             if let Ok(v) = serde_json::from_slice::<serde_json::Value>(&payload) {
-                                let text = v["result"]["text"].as_str().unwrap_or("");
+                                let text = v["results"][0]["text"]
+                                    .as_str()
+                                    .or_else(|| v["result"]["text"].as_str())
+                                    .or_else(|| v["text"].as_str())
+                                    .unwrap_or("");
                                 app_recv
                                     .emit(
                                         "e2e://question_transcript",

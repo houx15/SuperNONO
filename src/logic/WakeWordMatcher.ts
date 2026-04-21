@@ -70,10 +70,21 @@ export function normalize(s: string): string {
 }
 
 /**
+ * Known spellings of the assistant's name, after normalize(): ASR
+ * interchangeably returns "nono" / "NONO" / "no no" (normalized → "nono")
+ * or the Chinese transliteration "诺诺". buildNeedles() treats any of
+ * these as the same name so users who pronounce it slightly differently
+ * (or whose ASR model prefers one writing) still trigger Q&A.
+ */
+const NAME_VARIANTS = ['nono', '诺诺'];
+
+/**
  * Given a user-configured wake phrase, return a list of normalized patterns
  * to match against. If the user typed "嘿 Nono", we also accept
  *   嗨 Nono / 你好 Nono / 喂 Nono / plain Nono (on its own)
- * so the app doesn't fail to trigger because ASR heard "嗨" instead of "嘿".
+ * plus the same set with 诺诺 swapped in for Nono — so the app doesn't
+ * fail to trigger because ASR heard "嗨" instead of "嘿" or transcribed
+ * the name in pinyin rather than Latin letters.
  *
  * If the phrase doesn't contain one of the common leading Chinese
  * attention-getters, we only use the phrase as-is.
@@ -89,12 +100,20 @@ export function buildNeedles(wakeWord: string): string[] {
   for (const p of prefixes) {
     if (canonical.startsWith(normalize(p))) {
       const rest = canonical.slice(normalize(p).length);
+      // If the name part of the canonical phrase matches one of the
+      // known spellings, also generate needles for the other spellings
+      // (so e.g. configured "嘿 Nono" also triggers on "嘿 诺诺").
+      const names = NAME_VARIANTS.includes(rest) ? NAME_VARIANTS : [rest];
       for (const alt of prefixes) {
-        set.add(normalize(alt) + rest);
+        for (const n of names) {
+          set.add(normalize(alt) + n);
+        }
       }
       // And the bare name, with no attention-getter — only if it's
       // non-trivial (avoid a single-char name matching everything).
-      if (rest.length >= 2) set.add(rest);
+      for (const n of names) {
+        if (n.length >= 2) set.add(n);
+      }
     }
   }
 

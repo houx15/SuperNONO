@@ -91,6 +91,35 @@ describe('WakeWordMatcher', () => {
     expect(ns).toContain('你好nono');
     expect(ns).toContain('喂nono');
     expect(ns).toContain('nono');
+    // ASR sometimes transcribes the name as Chinese 诺诺 — these
+    // needles must trigger too, or users whose ASR prefers pinyin
+    // wouldn't be able to summon Nono at all.
+    expect(ns).toContain('嘿诺诺');
+    expect(ns).toContain('嗨诺诺');
+    expect(ns).toContain('诺诺');
+  });
+
+  it('fires when ASR writes the name in Chinese (嘿 诺诺 / 诺诺)', () => {
+    const hit = vi.fn();
+    const m = new WakeWordMatcher('嘿 Nono', hit);
+    m.observe(u('嘿 诺诺，帮我查一下'));
+    expect(hit).toHaveBeenCalledTimes(1);
+  });
+
+  it('fires on the bare Chinese name alone', () => {
+    const hit = vi.fn();
+    const m = new WakeWordMatcher('嘿 Nono', hit);
+    m.observe(u('诺诺 今天的议题是什么'));
+    expect(hit).toHaveBeenCalledTimes(1);
+  });
+
+  it('fires on "no no" and "NONO" (case + whitespace invariant)', () => {
+    for (const variant of ['no no', 'NONO', 'No No']) {
+      const hit = vi.fn();
+      const m = new WakeWordMatcher('嘿 Nono', hit);
+      m.observe(u(`嘿 ${variant}, 帮我查`));
+      expect(hit).toHaveBeenCalledTimes(1);
+    }
   });
 
   it('buildNeedles does NOT expand arbitrary phrases', () => {
