@@ -51,7 +51,11 @@ describe('QaHandoff', () => {
     expect(exchanges.length).toBe(1);
   });
 
-  it('switches router to e2e before opening, back to asr after turn_end', async () => {
+  it('routes mic e2e → drop (while Nono speaks) → asr (after drain)', async () => {
+    // The 'drop' step prevents the speaker's own TTS output from being
+    // captured by the mic and looped back into either e2e or ASR. If it
+    // regresses, the user hears Nono feeding itself ("它外放的声音会被
+    // 自己又送回去").
     const asr = new FakeAsrClient();
     const e2e = new FakeE2eClient();
     const clock = new FakeClock(10_000);
@@ -76,7 +80,7 @@ describe('QaHandoff', () => {
     e2e.scriptTurn({ question: 'q', answer: 'a', audioChunks: [new Uint8Array([1])] });
     await done;
 
-    expect(spy.mock.calls.map((c) => c[0])).toEqual(['e2e', 'asr']);
+    expect(spy.mock.calls.map((c) => c[0])).toEqual(['e2e', 'drop', 'asr']);
   });
 });
 

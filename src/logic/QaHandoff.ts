@@ -17,6 +17,10 @@ export interface QaHandoffDeps {
   onExchange: (x: AiExchange) => void;
   onTranscriptBridge?: (u: Utterance) => void;
   onAudioChunk?: (c: Uint8Array) => void;
+  /** Returns ms remaining until already-scheduled TTS audio has played
+   *  out. Used to hold the router in 'drop' past turn_end so the speaker
+   *  tail doesn't loop back into the mic. */
+  audioPlayerDrainMs?: () => number;
 }
 
 /** Absolute ceiling on a single Q&A turn. If neither the server's
@@ -79,6 +83,14 @@ export class QaHandoff {
     hook('audio', (c) => {
       this.deps.onAudioChunk?.(c as Uint8Array);
       this.deps.onOrbState('speaking');
+      // Once Nono starts speaking, stop feeding mic chunks anywhere —
+      // otherwise the speaker output loops back through the mic and
+      // gets sent either to e2e (as a fake interrupt) or back to ASR
+      // (transcribed as Nono's own words). User reported this as "它
+      // 外放的声音会被自己又送回去." We hold 'drop' through turn_end
+      // and past the player's drain so the last few hundred ms of
+      // Nono's TTS tail don't leak in either.
+      this.deps.router?.switchTo('drop');
     });
 
     let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
@@ -119,6 +131,17 @@ export class QaHandoff {
         this.deps.onTranscriptBridge({ t, speaker: 'User (to Nono)', text: question, final: true });
       if (answer)
         this.deps.onTranscriptBridge({ t: t + 1, speaker: 'SuperNono', text: answer, final: true });
+    }
+
+    // Wait for any queued TTS audio to finish playing out the speaker
+    // before routing the mic back to ASR. Without this the mic captures
+    // the ~1–2 s tail of Nono's answer still draining from the Web
+    // Audio buffer and feeds it into ASR as a self-transcribed sentence.
+    const drainMs = this.deps.audioPlayerDrainMs?.() ?? 0;
+    if (drainMs > 0) {
+      await new Promise<void>((resolve) => {
+        this.deps.clock.setTimeout(() => resolve(), drainMs + 200);
+      });
     }
 
     // ASR stayed connected throughout; just route chunks back to it.

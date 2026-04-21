@@ -51,4 +51,15 @@ export class AnswerAudioPlayer {
   stop(): void {
     this.stopped = true;
   }
+
+  /** Milliseconds remaining until all already-enqueued chunks have
+   *  finished playing. 0 if the queue is idle or the player is stopped.
+   *  QaHandoff uses this to hold the mic routing in 'drop' until the
+   *  speaker tail has played out — otherwise the mic captures the tail
+   *  of Nono's own TTS and loops it back into ASR. */
+  msUntilIdle(): number {
+    if (this.stopped) return 0;
+    const remaining = this.nextStart - this.ctx.currentTime;
+    return Math.max(0, Math.round(remaining * 1000));
+  }
 }

@@ -25,7 +25,7 @@ export interface MeetingSessionDeps {
   clock: Clock;
   mic: MicCaptureHandle;
   config: MeetingSessionConfig;
-  audioPlayer?: { enqueue(c: Uint8Array): void; stop(): void };
+  audioPlayer?: { enqueue(c: Uint8Array): void; stop(): void; msUntilIdle?(): number };
 }
 
 export class MeetingSession {
@@ -106,6 +106,10 @@ export class MeetingSession {
         // report of "嘿 Nono nothing responds until I say it again."
         // The matcher debounces repeats per utterance.
         this.matcher?.observe(utt);
+        // Drive the live ticker. It's the "current sentence being
+        // spoken" display — it needs partials to show anything before
+        // the 800 ms silence that flips an utterance to definite.
+        this.emit('transcript', utt);
       }),
     );
     this.asrUnsub.push(this.deps.asr.on('error', this.onAsrError));
@@ -153,6 +157,7 @@ export class MeetingSession {
       },
       onTranscriptBridge: (u) => void this.persistUtterance(u),
       onAudioChunk: (c) => this.deps.audioPlayer?.enqueue(c),
+      audioPlayerDrainMs: () => this.deps.audioPlayer?.msUntilIdle?.() ?? 0,
     });
 
     // Order matters: start ASR before the mic so a failed handshake doesn't
