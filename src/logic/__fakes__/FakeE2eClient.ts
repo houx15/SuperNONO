@@ -1,7 +1,13 @@
 import type { E2eClient, E2eOpen, Unsubscribe } from '../adapters';
 import type { TestResult, E2eError } from '../types';
 
-type Ev = 'question_transcript' | 'answer_transcript' | 'audio' | 'turn_end' | 'error';
+type Ev =
+  | 'question_transcript'
+  | 'answer_transcript'
+  | 'audio'
+  | 'turn_end'
+  | 'user_speaking'
+  | 'error';
 
 export class FakeE2eClient implements E2eClient {
   private listeners: Map<Ev, Set<(p: never) => void>> = new Map();
@@ -25,6 +31,7 @@ export class FakeE2eClient implements E2eClient {
   on(event: 'answer_transcript', cb: (p: { text: string }) => void): Unsubscribe;
   on(event: 'audio', cb: (p: Uint8Array) => void): Unsubscribe;
   on(event: 'turn_end', cb: () => void): Unsubscribe;
+  on(event: 'user_speaking', cb: () => void): Unsubscribe;
   on(event: 'error', cb: (e: E2eError) => void): Unsubscribe;
   // catch-all overload for union-typed calls (e.g. forEach over all events)
   on(event: Ev, cb: (p: unknown) => void): Unsubscribe;
@@ -44,10 +51,15 @@ export class FakeE2eClient implements E2eClient {
   }
 
   scriptTurn(t: { question: string; answer: string; audioChunks: Uint8Array[] }) {
+    this.emit('user_speaking', undefined);
     this.emit('question_transcript', { text: t.question });
     for (const chunk of t.audioChunks) this.emit('audio', chunk);
     this.emit('answer_transcript', { text: t.answer });
     this.emit('turn_end', undefined);
+  }
+
+  emitUserSpeaking(): void {
+    this.emit('user_speaking', undefined);
   }
 
   emitError(e: import('../types').E2eError): void {

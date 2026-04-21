@@ -67,7 +67,7 @@ describe('MeetingSession', () => {
   });
 
   it('triggers Q&A when wake word is heard', async () => {
-    const { session, asr, e2e } = makeSession();
+    const { session, asr, e2e, clock } = makeSession();
     const orbStates: string[] = [];
     session.on('orbState', (s) => orbStates.push(s as string));
     await session.start('Meeting');
@@ -76,6 +76,10 @@ describe('MeetingSession', () => {
     // which asynchronously opens E2E. Then script the E2E turn.
     await flush();
     e2e.scriptTurn({ question: '价格?', answer: '12-28 USD', audioChunks: [new Uint8Array([1])] });
+    await flush();
+    // Q&A is now multi-turn: after turn_end we sit in a follow-up
+    // listen window and only return to idle on silence timeout.
+    clock.advance(1_100);
     await flush();
     expect(orbStates).toEqual(expect.arrayContaining(['activated', 'idle']));
   });

@@ -39,6 +39,10 @@ export interface E2eClient {
   on(event: 'answer_transcript', cb: (p: { text: string }) => void): Unsubscribe;
   on(event: 'audio', cb: (p: Uint8Array) => void): Unsubscribe;
   on(event: 'turn_end', cb: () => void): Unsubscribe;
+  /** Fired when Volcano recognizes the user has started speaking in the
+   *  current session (ASRInfo event 450). Used to detect activity
+   *  during the multi-turn follow-up window. */
+  on(event: 'user_speaking', cb: () => void): Unsubscribe;
   on(event: 'error', cb: (e: E2eError) => void): Unsubscribe;
   close(): Promise<void>;
   testCredentials(appId: string, accessKey: string): Promise<TestResult>;

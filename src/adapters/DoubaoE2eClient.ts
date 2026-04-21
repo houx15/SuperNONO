@@ -3,7 +3,13 @@ import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import type { E2eClient, E2eOpen, Unsubscribe } from '../logic/adapters';
 import type { TestResult, E2eError } from '../logic/types';
 
-type Ev = 'question_transcript' | 'answer_transcript' | 'audio' | 'turn_end' | 'error';
+type Ev =
+  | 'question_transcript'
+  | 'answer_transcript'
+  | 'audio'
+  | 'turn_end'
+  | 'user_speaking'
+  | 'error';
 
 export class DoubaoE2eClient implements E2eClient {
   private listeners = new Map<Ev, Set<(p: never) => void>>();
@@ -30,6 +36,9 @@ export class DoubaoE2eClient implements E2eClient {
       await listen<number[]>('e2e://audio', (e) => this.emit('audio', new Uint8Array(e.payload))),
     );
     this.unlistens.push(await listen('e2e://turn_end', () => this.emit('turn_end', undefined)));
+    this.unlistens.push(
+      await listen('e2e://user_speaking', () => this.emit('user_speaking', undefined)),
+    );
     this.unlistens.push(
       await listen<E2eError>('e2e://error', (e) => this.emit('error', e.payload)),
     );
@@ -59,6 +68,7 @@ export class DoubaoE2eClient implements E2eClient {
   on(event: 'answer_transcript', cb: (p: { text: string }) => void): Unsubscribe;
   on(event: 'audio', cb: (p: Uint8Array) => void): Unsubscribe;
   on(event: 'turn_end', cb: () => void): Unsubscribe;
+  on(event: 'user_speaking', cb: () => void): Unsubscribe;
   on(event: 'error', cb: (e: E2eError) => void): Unsubscribe;
   on(event: Ev, cb: (p: never) => void): Unsubscribe {
     if (!this.listeners.has(event)) this.listeners.set(event, new Set());

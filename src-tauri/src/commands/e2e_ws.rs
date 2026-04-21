@@ -411,6 +411,14 @@ pub async fn e2e_open(
             match msg {
                 Ok(Message::Binary(bytes)) => match decode_server_frame(&bytes) {
                     Some(ServerFrame::Event { event_id, payload }) => match event_id {
+                        450 => {
+                            // ASRInfo: Volcano recognized the first
+                            // character from the user's current utterance.
+                            // Earlier signal than 451 ASRResponse — QaHandoff
+                            // uses this to detect "user started speaking
+                            // again" during the multi-turn follow-up window.
+                            app_recv.emit("e2e://user_speaking", ()).ok();
+                        }
                         451 => {
                             // user transcript
                             if let Ok(v) = serde_json::from_slice::<serde_json::Value>(&payload) {
@@ -435,7 +443,12 @@ pub async fn e2e_open(
                                     .ok();
                             }
                         }
-                        352 => {
+                        359 => {
+                            // TTSEnded: Nono finished a turn. This is the
+                            // correct turn-end signal per the docs — the
+                            // previous code matched event 352 (TTSResponse)
+                            // which is never delivered through this event
+                            // path (it comes as msg_type 0b1011 audio).
                             app_recv.emit("e2e://turn_end", ()).ok();
                         }
                         _ => { /* connection/session lifecycle events — ignore */ }
