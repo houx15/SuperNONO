@@ -36,6 +36,16 @@ export class SummaryScheduler {
     this.running = false;
   }
 
+  /** Force one summary over whatever has accumulated since the last
+   *  tick. Called by MeetingSession.stop() so any speech that landed
+   *  between the last scheduled summary and the End Meeting button
+   *  (typically: Q&A turns + follow-up discussion) still makes it
+   *  into the "Summaries" section of the minutes. Safe to call after
+   *  stop(). */
+  async flush(): Promise<void> {
+    await this.tick();
+  }
+
   private schedule() {
     if (!this.running) return;
     // First summary fires early (FIRST_SUMMARY_MS ≈ 60 s) so the user sees

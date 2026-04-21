@@ -33,13 +33,22 @@ export interface PromptBundle {
  *  turns are directed to the AI assistant and MUST NOT be treated as
  *  meeting content. */
 const NONO_CONTEXT_ZH =
-  '注意："Nono"（或 SuperNono、嘿 Nono、嗨 Nono、你好 Nono、喂 Nono）是本会议中 AI 助手的唤醒词，类似 "Hey Siri"。' +
-  '任何以这些短语开头或包含它们的句子都是对 AI 助手的提问，不属于会议内容——请在摘要、决策、待办中忽略这类句子。';
+  '本会议中，"Nono"（或 SuperNono、嘿 Nono）是 AI 助手的名字/唤醒词。转写里会出现三种相关格式：' +
+  '(1) 说话人 [Speaker] 句子中含 "嘿 Nono ..." 是用户触发 AI 的原始识别片段，通常被截断；' +
+  '(2) 说话人 [User (to Nono)] 的句子是用户向 AI 提出的完整问题；' +
+  '(3) 说话人 [SuperNono] 的句子是 AI 的回答。' +
+  '(2) 和 (3) 构成了用户与 AI 的问答，**属于会议内容**，请在摘要/决策/待办中包含它们；' +
+  '(1) 与 (2) 重复时以 (2) 为准，不要重复列出。';
 const NONO_CONTEXT_EN =
-  'Note: "Nono" (also SuperNono, "hey Nono", "hi Nono") is the wake word for this meeting\'s AI ' +
-  'assistant, analogous to "Hey Siri". Any sentence starting with or containing these phrases is a ' +
-  'question directed AT the assistant, not meeting content. Exclude such sentences from summaries, ' +
-  'decisions, and action items.';
+  'In this meeting, "Nono" (or SuperNono, "hey Nono") is the name/wake word of the AI assistant. ' +
+  'Three related formats appear in the transcript: ' +
+  '(1) lines by [Speaker] containing "hey Nono …" are raw ASR captures of the wake phrase, ' +
+  'usually truncated because the mic was re-routed mid-sentence; ' +
+  '(2) lines with speaker [User (to Nono)] are the complete question the user asked the AI; ' +
+  "(3) lines with speaker [SuperNono] are the AI's answers. " +
+  '(2) and (3) together form the Q&A between user and AI and ARE meeting content — include them ' +
+  'in summaries, decisions, and action items. When (1) overlaps with (2), prefer (2) and do not ' +
+  'duplicate.';
 
 const PROMPTS_ZH: PromptBundle = {
   buildSummaryPrompt(prev, recent) {

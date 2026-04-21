@@ -163,7 +163,18 @@ export class MeetingSession {
         void this.deps.persistence.writeAiExchanges(id, this.aiExchanges);
         this.emit('qa', x);
       },
-      onTranscriptBridge: (u) => void this.persistUtterance(u),
+      onTranscriptBridge: (u) => {
+        // Q&A turns must land in the TranscriptBuffer just like raw
+        // ASR finals. Otherwise SummaryScheduler.sinceLastSummary()
+        // and buffer.all() (what the minutes renderer reads) never see
+        // them — which is why the user reported "Nono 交互的内容和
+        // transcript没有出现在end meeting之后的summary里面." The
+        // tagged speakers ("User (to Nono)" / "SuperNono") let the
+        // prompt tell the LLM these lines are the AI exchange, not
+        // noise.
+        this.buffer.append(u);
+        void this.persistUtterance(u);
+      },
       onAudioChunk: (c) => this.deps.audioPlayer?.enqueue(c),
       audioPlayerDrainMs: () => this.deps.audioPlayer?.msUntilIdle?.() ?? 0,
       onLiveQa: (live) => this.emit('qaLive', live),
@@ -267,10 +278,19 @@ export class MeetingSession {
     if (!this.running || !this.meta || !this.id) return;
     this.running = false;
     this.scheduler?.stop();
+    // Flush a final summary over any content that arrived after the
+    // last scheduled tick — typically Q&A turns + the tail of
+    // discussion just before End Meeting. Without this, short
+    // meetings (or meetings that ended before the 5 min cadence
+    // fired again) leave the "Summaries" section empty of everything
+    // that happened post-Nono.
+    await this.scheduler?.flush();
+    this.suppressClose = true;
     for (const unsub of this.asrUnsub) unsub();
     this.asrUnsub = [];
     await this.deps.mic.stop();
     await this.deps.asr.stop();
+    this.suppressClose = false;
     const endedAt = this.deps.clock.now();
     const duration = Math.floor((endedAt - this.meta.started_at) / 1000);
 
