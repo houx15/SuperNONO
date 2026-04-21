@@ -79,7 +79,7 @@ describe('MeetingSession', () => {
     await flush();
     // Q&A is now multi-turn: after turn_end we sit in a follow-up
     // listen window and only return to idle on silence timeout.
-    clock.advance(1_100);
+    clock.advance(3_100);
     await flush();
     expect(orbStates).toEqual(expect.arrayContaining(['activated', 'idle']));
   });

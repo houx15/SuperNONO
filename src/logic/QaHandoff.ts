@@ -30,10 +30,12 @@ const QA_HARD_TIMEOUT_MS = 120_000;
 
 /** After Nono finishes a turn, how long to wait for the user to start
  *  a follow-up before closing the session and handing the mic back to
- *  the meeting transcriber. The user asked for 1 s — short enough that
- *  resuming normal meeting chatter re-engages ASR quickly, long enough
- *  to bridge a breath between questions. */
-const FOLLOWUP_SILENCE_MS = 1000;
+ *  the meeting transcriber. 1 s turned out to be too tight — the user
+ *  barely had time to draw breath before Nono exited. 3 s comfortably
+ *  covers a "let me think…" pause while still being short enough that
+ *  resuming meeting chatter re-engages ASR before the conversation
+ *  continues. */
+const FOLLOWUP_SILENCE_MS = 3000;
 
 /** Phrases in the question transcript that mean "I'm done, thanks."
  *  Normalized with the same rules as WakeWordMatcher (lowercase, strip

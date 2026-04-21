@@ -7,7 +7,7 @@ import { FakeClock } from './__fakes__/FakeClock';
 import { TranscriptBuffer } from './TranscriptBuffer';
 
 describe('QaHandoff', () => {
-  it('closes the session after one turn if no follow-up arrives within 1 s', async () => {
+  it('closes the session after one turn if no follow-up arrives within the silence window', async () => {
     // Baseline single-turn flow: user asks, Nono answers, user goes
     // quiet — session closes on silence timeout and mic returns to ASR.
     const asr = new FakeAsrClient();
@@ -35,7 +35,7 @@ describe('QaHandoff', () => {
     e2e.scriptTurn({ question: 'Q?', answer: 'A.', audioChunks: [new Uint8Array([1])] });
     await flush();
     // Silence window — nothing further happens for 1 s.
-    clock.advance(1_100);
+    clock.advance(3_100);
     await turnDone;
 
     expect(asrStopSpy).not.toHaveBeenCalled();
@@ -52,7 +52,7 @@ describe('QaHandoff', () => {
     // This is the bug the user reported: "after nono responds I said
     // a second question, but it keeps silence." The fix is multi-turn:
     // if the user starts speaking (ASRInfo / question_transcript)
-    // within FOLLOWUP_SILENCE_MS of turn_end, we stay open and wait
+    // within the silence window of turn_end, we stay open and wait
     // for the next turn_end.
     const asr = new FakeAsrClient();
     const e2e = new FakeE2eClient();
@@ -80,7 +80,7 @@ describe('QaHandoff', () => {
     // cancels the silence timer.
     e2e.scriptTurn({ question: 'Q2', answer: 'A2', audioChunks: [new Uint8Array([2])] });
     await flush();
-    clock.advance(1_100);
+    clock.advance(3_100);
     await done;
 
     expect(exchanges.length).toBe(2);
@@ -148,7 +148,7 @@ describe('QaHandoff', () => {
     await flush();
     e2e.scriptTurn({ question: 'q', answer: 'a', audioChunks: [new Uint8Array([1])] });
     await flush();
-    clock.advance(1_100);
+    clock.advance(3_100);
     await done;
 
     expect(spy.mock.calls.map((c) => c[0])).toEqual(['e2e', 'drop', 'e2e', 'asr']);

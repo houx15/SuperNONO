@@ -192,20 +192,15 @@ export class MeetingSession {
   private async triggerQa() {
     if (!this.qa) return;
     await this.qa.trigger();
-    // The ASR WebSocket sat idle the whole Q&A session (mic was routed
-    // to e2e / drop). On resume, Volcano's VAD can miss the leading
-    // syllables of the next meeting sentence — the user reported this
-    // as "after nono finishes, the transcript can only capture several
-    // characters of my sentence." A quick reconnect clears that state.
-    try {
-      await this.deps.asr.stop();
-      await this.deps.asr.start({
-        lang: this.deps.config.lang,
-        enableSpeakerId: true,
-      });
-    } catch {
-      // Fall back to the retry state machine if the reconnect fails.
-    }
+    // Earlier versions did asr.stop() + asr.start() here to clear a
+    // "stale VAD" state, but that raced with the 'closed' → retryable
+    // error → tryReconnect path: the close fired after stop(), kicked
+    // off a reconnect while our own start() was in flight, and the
+    // session wedged in a "reconnecting" loop with "session not found"
+    // Promise rejections from mic chunks hitting the dead session id.
+    // The multi-turn Q&A flow already covers the user's actual
+    // scenario (ASR only becomes the sink after the user stops
+    // talking to Nono for 3 s — plenty of time for Volcano to settle).
   }
 
   private setStatus(next: typeof this.status) {

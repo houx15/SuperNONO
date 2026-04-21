@@ -35,7 +35,14 @@ export class VolcanoAsrClient implements AsrClient {
   }
 
   sendAudio(chunk: Uint8Array): void {
-    void invoke('asr_send_audio', { sessionId: this.sessionId, pcmChunk: Array.from(chunk) });
+    // Mic chunks fly at ~50 Hz from cpal; they can easily race with an
+    // asr_stop (on meeting end, error, or reconnect), producing a
+    // "session not found" error on the Rust side that otherwise
+    // surfaces as an unhandled promise rejection in the dev console.
+    // It's benign — the audio just has nowhere to go — so swallow it.
+    invoke('asr_send_audio', { sessionId: this.sessionId, pcmChunk: Array.from(chunk) }).catch(
+      () => {},
+    );
   }
 
   async stop(): Promise<void> {
