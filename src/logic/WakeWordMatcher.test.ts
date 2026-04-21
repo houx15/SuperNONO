@@ -21,11 +21,20 @@ describe('WakeWordMatcher', () => {
     expect(hit).toHaveBeenCalledTimes(1);
   });
 
-  it('ignores partials', () => {
+  it('fires on a partial as soon as the phrase is heard (no wait for definite)', () => {
     const hit = vi.fn();
     const m = new WakeWordMatcher('嘿 Nono', hit);
     m.observe(u('嘿 Nono,帮我查一下', false));
-    expect(hit).not.toHaveBeenCalled();
+    expect(hit).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not re-fire within the cooldown window for follow-up partials', () => {
+    const hit = vi.fn();
+    const m = new WakeWordMatcher('嘿 Nono', hit);
+    m.observe(u('嘿 Nono 帮我', false));
+    m.observe(u('嘿 Nono 帮我总结', false));
+    m.observe(u('嘿 Nono 帮我总结会议', true));
+    expect(hit).toHaveBeenCalledTimes(1);
   });
 
   it('is case-insensitive and whitespace-tolerant', () => {
@@ -36,14 +45,14 @@ describe('WakeWordMatcher', () => {
   });
 
   it('accepts common alternate Chinese attention-getters', () => {
-    const hit = vi.fn();
-    const m = new WakeWordMatcher('嘿 Nono', hit);
-    m.observe(u('嗨 Nono 帮我总结'));
-    expect(hit).toHaveBeenCalledTimes(1);
-    m.observe(u('你好 Nono 现在几点了'));
-    expect(hit).toHaveBeenCalledTimes(2);
-    m.observe(u('喂 Nono 查天气'));
-    expect(hit).toHaveBeenCalledTimes(3);
+    // Fresh matcher per phrase so the 3 s cooldown doesn't swallow
+    // back-to-back hits — this test is about variant coverage, not dedup.
+    for (const phrase of ['嗨 Nono 帮我总结', '你好 Nono 现在几点了', '喂 Nono 查天气']) {
+      const hit = vi.fn();
+      const m = new WakeWordMatcher('嘿 Nono', hit);
+      m.observe(u(phrase));
+      expect(hit).toHaveBeenCalledTimes(1);
+    }
   });
 
   it('accepts bare name once user has a prefix-style wake', () => {

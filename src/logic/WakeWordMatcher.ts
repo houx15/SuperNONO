@@ -12,8 +12,17 @@ import type { Utterance } from './types';
  * canonical wake word and we automatically expand it into a small set of
  * common variants so ASR fuzz ("嗨 Nono", "你好 Nono") still triggers.
  */
+/** Don't re-fire within this window of a hit. Volcano sends many
+ *  partials per utterance (and, with result_type: "single", one final
+ *  after 800 ms of silence). Without dedup we'd trigger Q&A repeatedly
+ *  while the user is still saying the wake phrase. 3 s comfortably
+ *  covers the time to utter "嘿 Nono" + the first half of the question
+ *  before we lock out further triggers. */
+const HIT_COOLDOWN_MS = 3000;
+
 export class WakeWordMatcher {
   private needles: string[];
+  private lastHitAt = 0;
 
   constructor(
     wakeWord: string,
@@ -26,11 +35,26 @@ export class WakeWordMatcher {
     this.needles = buildNeedles(w);
   }
 
+  /**
+   * Observe every utterance — partial AND final.
+   *
+   * Historically we only matched on finals, but Volcano's definite
+   * flag only flips after `end_window_size` ms of silence (800 ms).
+   * If the user says "嘿 Nono" and then immediately continues the
+   * question, the first partial of the whole sentence contains the
+   * wake phrase but doesn't go definite for seconds — and the user
+   * reported "nothing responds until I say it again." Firing on the
+   * partial + a cooldown-based dedup closes that gap without causing
+   * repeat triggers within a single wake event.
+   */
   observe(u: Utterance) {
-    if (!u.final) return;
     const text = normalize(u.text);
+    if (!text) return;
     for (const n of this.needles) {
       if (text.includes(n)) {
+        const now = Date.now();
+        if (now - this.lastHitAt < HIT_COOLDOWN_MS) return;
+        this.lastHitAt = now;
         this.onHit(u);
         return;
       }

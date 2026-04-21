@@ -116,6 +116,32 @@ pub mod frame {
                 Some(ServerFrame::Event { event_id, payload })
             }
             0b1011 => {
+                // Audio-only response. Per docs line 889-890, TTSResponse
+                // frames are msg_type=0b1011 with flags=0b0100 (event bit),
+                // carrying event_id (4B) + session_id_size (4B) + session_id
+                // (var) + payload_size (4B) + payload. Skipping the event
+                // header was making us read event_id as payload_size — the
+                // first ~44 bytes of every chunk ended up rendered as
+                // garbage PCM, which is why Nono sounded like a broken
+                // speaker even though the data was clean pcm_s16le.
+                if flags & 0b0100 != 0 {
+                    // event_id
+                    if bytes.len() < off + 4 {
+                        return None;
+                    }
+                    off += 4;
+                    // session_id_size + session_id
+                    if bytes.len() < off + 4 {
+                        return None;
+                    }
+                    let sid_size =
+                        u32::from_be_bytes(bytes[off..off + 4].try_into().ok()?) as usize;
+                    off += 4;
+                    if bytes.len() < off + sid_size {
+                        return None;
+                    }
+                    off += sid_size;
+                }
                 if bytes.len() < off + 4 {
                     return None;
                 }
@@ -227,6 +253,32 @@ pub mod frame {
             frame.extend_from_slice(&pcm);
             match decode_server_frame(&frame).unwrap() {
                 ServerFrame::Audio { pcm: got } => assert_eq!(got, pcm),
+                _ => panic!("expected audio"),
+            }
+        }
+
+        #[test]
+        fn decode_tts_response_strips_event_and_session_headers() {
+            // Real TTSResponse example straight from
+            // docs/volcano/e2e-interaction-api.md line 889-890: msg_type
+            // 0b1011 with flags 0b0100 (event), carrying event_id (352) +
+            // session_id_size (36) + session_id (UUID) + payload_size +
+            // opus audio. Before the decode fix, the payload returned to
+            // the browser included event_id + session_id bytes, which were
+            // played as garbage PCM — this is the "broken speaker" noise
+            // the user heard.
+            let sid = b"3c791a7d-227a-4446-993b-24f9e302cc98";
+            let audio_payload: Vec<u8> = vec![0xDE, 0xAD, 0xBE, 0xEF, 0x01, 0x02, 0x03, 0x04];
+
+            let mut frame = vec![0x11u8, 0xB4, 0x00, 0x00]; // msg 0b1011, flags 0b0100
+            frame.extend_from_slice(&352u32.to_be_bytes()); // event_id
+            frame.extend_from_slice(&(sid.len() as u32).to_be_bytes()); // sid size
+            frame.extend_from_slice(sid);
+            frame.extend_from_slice(&(audio_payload.len() as u32).to_be_bytes());
+            frame.extend_from_slice(&audio_payload);
+
+            match decode_server_frame(&frame).unwrap() {
+                ServerFrame::Audio { pcm: got } => assert_eq!(got, audio_payload),
                 _ => panic!("expected audio"),
             }
         }

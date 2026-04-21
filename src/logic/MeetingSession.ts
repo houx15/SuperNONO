@@ -97,7 +97,17 @@ export class MeetingSession {
     await this.deps.persistence.createMeeting(meta);
 
     this.asrUnsub.push(this.deps.asr.on('final', (u) => this.handleUtterance(u as Utterance)));
-    this.asrUnsub.push(this.deps.asr.on('partial', (u) => this.buffer.append(u as Utterance)));
+    this.asrUnsub.push(
+      this.deps.asr.on('partial', (u) => {
+        const utt = u as Utterance;
+        this.buffer.append(utt);
+        // Trigger wake word on partials too — waiting for the definite
+        // flag means an ~800 ms silence delay, which matches the user
+        // report of "嘿 Nono nothing responds until I say it again."
+        // The matcher debounces repeats per utterance.
+        this.matcher?.observe(utt);
+      }),
+    );
     this.asrUnsub.push(this.deps.asr.on('error', this.onAsrError));
     // If the server silently closes the WS (inactivity timeout, server
     // restart, network blip) we used to do nothing — cpal kept firing

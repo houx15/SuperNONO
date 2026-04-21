@@ -367,6 +367,12 @@ pub async fn asr_start(
     let (mut sink, mut stream) = ws.split();
 
     // First frame: full client request with audio+request config.
+    // `result_type: "single"` is load-bearing — without it, every frame
+    // re-emits ALL past definite utterances (the default "full" mode),
+    // so a 2-minute meeting produces the same sentence persisted dozens
+    // of times in the transcript. See docs/volcano/asr-stream-api.md
+    // line 326-327 ("设置为'single'则为增量结果返回，即不返回之前分句
+    // 的结果").
     let first_payload = json!({
         "user": { "uid": "supernono" },
         "audio": { "format": "pcm", "codec": "raw", "rate": 16000, "bits": 16, "channel": 1 },
@@ -375,6 +381,7 @@ pub async fn asr_start(
             "enable_punc": true,
             "enable_itn": true,
             "show_utterances": true,
+            "result_type": "single",
             "end_window_size": 800
         }
     });
